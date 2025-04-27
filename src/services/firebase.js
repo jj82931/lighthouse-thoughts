@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore} from "firebase/firestore";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -11,7 +12,8 @@ const firebaseConfig = {
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID // 애널리틱스 ID
   };
 
-  const app = initializeApp(firebaseConfig);
-  export const auth = getAuth(app);
+  const app = initializeApp(firebaseConfig); // init app
+  export const auth = getAuth(app); // Firebase Authentication instance
+  export const db = getFirestore(app); //firestore db instance
 
   export default app;
