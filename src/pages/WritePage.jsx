@@ -1,4 +1,3 @@
-import React, {useState} from "react";
 import React, {useEffect, useState} from "react";
 import { analyzeAI } from "../services/ai";
 import { useAuth } from "../contexts/Auth";
@@ -71,7 +70,12 @@ function Writepage(){
     };
 
 
+    return(
+        <div className="flex min-h-screen p-4 md:p-6 lg:p-8 gap-6 bg-gray-50 dark:bg-gray-800">
+        {/* 왼쪽: 일기 작성 영역 */}
+        <div className="flex-grow md:w-2/3 lg:w-3/4 bg-white dark:bg-gray-700 p-4 rounded-lg shadow">
         <h1 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">Write diary</h1>
+        <p className="text-gray-600 dark:text-gray-300 mb-4">What did you think today?</p>
         <textarea
             value={diaryText}
             onChange={handleTextChange}
