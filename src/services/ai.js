@@ -21,7 +21,7 @@ export async function analyzeAI(UserText) {
     `;
 
     const data = {
-        model: "google/gemini-2.0-flash-exp:free", 
+        model: "deepseek/deepseek-chat-v3-0324:free", 
         messages: [
             {
               role: "system",
