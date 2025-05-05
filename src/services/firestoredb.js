@@ -1,32 +1,26 @@
-import { collection, query, orderBy, limit, getDocs, doc, updateDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, updateDoc, 
+    serverTimestamp, deleteDoc, startAfter } from "firebase/firestore";
 import { db } from "./firebase.js"
 
-export async function getUserDiaries(userid, sortBy = 'createdAtDesc', count = 30) {
+export async function getUserDiaries(userid, count = 10, lastDoc = null) {
 
     if(!userid){
         console.error("getUserDiaries: Need userId.");
-        return []; // userId 없으면 빈 배열 반환
+        return { diaries: [], lastVisible: null }; // 반환 형식 통일
     }
 
     try {
         const diariesCollectionRef = collection(db, "users", userid, "diaries");
         let qr;
-        switch(sortBy){
-            case 'createdAtAsc':
-                qr = query(diariesCollectionRef, orderBy("createdAt", "asc"), limit(count));
-                break;
-            case 'moodScoreDesc':
-                qr = query(diariesCollectionRef, orderBy("moodScore", "desc"), orderBy("createdAt", "desc"), limit(count));
-                break;
-            case 'moodScoreAsc':
-                qr = query(diariesCollectionRef, orderBy("moodScore", "asc"), orderBy("createdAt", "desc"), limit(count));
-                break;
-            case 'createdAtDesc': // 기본값
-                default:                    
-                qr = query(diariesCollectionRef, orderBy("createdAt", "desc"), limit(count));
-                break;
-        }
+        // 항상 createdAt 기준으로 정렬 (기본: 최신순)
+        const baseQuery = query(diariesCollectionRef, orderBy("createdAt", "desc"), limit(count));
 
+        // 페이지네이션 시작점 적용
+        if (lastDoc) {
+            qr = query(baseQuery, startAfter(lastDoc)); // lastDoc 스냅샷 직접 사용
+        } else {
+            qr = baseQuery; // 첫 페이지
+        }
         const querySnapshot = await getDocs(qr); //쿼리 실행하여 스냅샷 가져오기
         const diaries = [];
         querySnapshot.forEach((doc) => {
@@ -35,14 +29,14 @@ export async function getUserDiaries(userid, sortBy = 'createdAtDesc', count = 3
                 ...doc.data() // 문서 데이터 전체 포함
             });
         });
-        console.log(`getUserDiaries: Completed load (${sortBy}): ${diaries.length} documents`);
-
-        return diaries;
+        const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
+        console.log(`getUserDiaries: Completed load ${diaries.length} documents`);
+        return { diaries, lastVisible: lastVisible || null };
 
         
     } catch (error) {
-        console.error("Getting diary error:", error);
-        return []; // 오류 발생 시 빈 배열 반환
+        console.error("loading diaries error from firestore:", error);
+        return { diaries: [], lastVisible: null };
     }
     
 }

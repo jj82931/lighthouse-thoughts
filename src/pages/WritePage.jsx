@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, useMemo} from "react";
 import { analyzeAI } from "../services/ai";
 import { useAuth } from "../contexts/Auth";
 
@@ -15,14 +15,18 @@ function Writepage(){
     const [moodScoreDisplay, setMoodScoreDisplay] = useState(null);
 
     const [diaries, setDiaries] = useState([]);
-    const [listLoading, setListLoading] = useState(true);
-    const [listError, setListError] = useState(null); // 목록 로딩 에러
     const [sortBy, setSortBy] = useState('createdAtDesc'); // 정렬 기준 상태 
     const [selectDiary, setSelectDiary] = useState(null);
     const [searchTerm, setSearchTerm] = useState(''); //검색어 상태
     const [editing, setEditing] = useState(false); //글 수정 상태
     const [originalDiary, setOriginalDiary] = useState(''); //원본글과 변경된글을 저장하기 위한 상태변수
     const [diaryToDelete, setDiaryToDelete] = useState(null); // 삭제할 일기 ID 저장
+    const [lastVisibleDiary, setLastVisibleDiary] = useState(null);
+    const [checkMorediaries, setCheckMoreDiaries] = useState(false);
+
+    const [listLoading, setListLoading] = useState(true);
+    const [listError, setListError] = useState(null); // 목록 로딩 에러
+    const [moreLoading, setMoreLoading] = useState(false);
     
 
     const {currentUser} = useAuth();
@@ -38,21 +42,29 @@ function Writepage(){
         if(currentUser){
             setListLoading(true); 
             setListError(null);
-
-            getUserDiaries(currentUser.uid, sortBy).then(fetchedDiaries => {
-                setDiaries(fetchedDiaries);
-            }).catch(error => {
-                console.error("List loading Error occured :", error);
-                setListError("List is not able to load from DB.");
-            }).finally(() => {
-                setListLoading(false); 
-            });
-        } else {
-            // 로그인한 사용자가 없으면 목록 비우기
             setDiaries([]);
-            setListLoading(false); // 로딩 상태 false로 설정
+            setLastVisibleDiary(null);
+            setCheckMoreDiaries(true);
+
+            getUserDiaries(currentUser.uid, 10)
+            .then(({ diaries: fetchedDiaries, lastVisible }) => {
+                setDiaries(fetchedDiaries);
+                setLastVisibleDiary(lastVisible); // 마지막 문서 저장
+                setCheckMoreDiaries(fetchedDiaries.length === 10); // 가져온 개수가 요청 개수와 같으면 더 있을 가능성 있음
+              })
+              .catch(error => {
+                console.error("List loading Error occured :", error);
+                    setListError("List is not able to load from DB.");
+                    checkMorediaries(false); // 에러 시 더보기 없음
+              }).finally(() => { setListLoading(false); });
+        } else {
+            setDiaries([]);
+            setListLoading(false);
+            setLastVisibleDiary(null);
+            checkMorediaries(false);
         }
-    },[currentUser, sortBy]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser]);
 
     
 
@@ -95,10 +107,6 @@ function Writepage(){
             setLoading(false);
         }
     };
-    // --- 정렬 변경 핸들러 ---
-    const handleSortChange = (event) => {
-        setSortBy(event.target.value);
-    };
     // 다이어리 선택 핸들러
     const handleDiaryClick = (diaryid) => {
         const selectedDiary = diaries.find(diary => diary.id === diaryid);
@@ -121,11 +129,6 @@ function Writepage(){
     const handleSearchChange = (event) => {
         setSearchTerm(event.target.value);
     };
-    // 목록 필터링 로직 추가
-    const filteredDiaries = diaries.filter(diary => {
-        // diary.userText가 존재하고, 검색어를 포함하는지 확인 (대소문자 구분 없이)
-        return diary.userText?.toLowerCase().includes(searchTerm.toLowerCase());
-    });
     // cancel 버튼 핸들러
     const handleCancelEdit = () => {
         setEditing(false);
@@ -191,7 +194,55 @@ function Writepage(){
             setLoading(false); // 로딩 종료
             setDiaryToDelete(null); // 삭제 대상 ID 초기화
         }
-    }
+    };
+
+     // --- 정렬 변경 핸들러 ---
+     const handleSortChange = (event) => {
+        setSortBy(event.target.value);
+    };
+
+    // ------ 리스트 더보기(more) 핸들러-----
+    const loadMoreDiaries = async () => {
+        if(!currentUser || !lastVisibleDiary || moreLoading){return;}
+        setMoreLoading(true);
+        setListError(null);
+        try {
+            const { diaries: newDiaries, lastVisible } = await getUserDiaries(currentUser.uid, 10, lastVisibleDiary);
+            setDiaries(prevDiaries => [...prevDiaries, ...newDiaries]);
+            setLastVisibleDiary(lastVisible);
+            setCheckMoreDiaries(newDiaries === 10);
+        } catch (error) {
+            console.error("List more loading error: ", error);
+            setListError("Error loading more diaries.");
+        } finally {
+            setMoreLoading(false);
+        }
+    };
+
+    // ---- 클라이언트측 정렬 및 필터링 ----
+    const sortedFilterDiaries = useMemo(() => {
+        let result = diaries.filter(diary =>
+            diary.userText?.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        
+          result.sort((a,b) => {
+            switch (sortBy) {
+                case 'createdAtAsc':
+                  // Timestamp 비교 시 toMillis() 사용 권장
+                  return (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0);
+                case 'moodScoreDesc':
+                  // moodScore가 null일 경우 맨 뒤로 보내기 (예시)
+                  return (b.moodScore ?? -1) - (a.moodScore ?? -1);
+                case 'moodScoreAsc':
+                  // moodScore가 null일 경우 맨 뒤로 보내기 (예시)
+                  return (a.moodScore ?? 101) - (b.moodScore ?? 101);
+                case 'createdAtDesc':
+                default:
+                  return (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0);
+              }
+          });
+          return result;
+    }, [diaries, searchTerm, sortBy]);
 
     /* ---------------------------------------------- 모달함수---------------------------------- */
     // 모달 여는 함수, 에러모달까지 같이 처리함함
@@ -261,8 +312,7 @@ function Writepage(){
         setInfoModal({ isOpen: false, message: '', type: 'info' });
     };
       
-
-
+    /* ---------------------------------------------- HTML ---------------------------------- */
     return(
         <div className="flex min-h-screen p-4 md:p-6 lg:p-8 gap-6 bg-gray-50 dark:bg-gray-800">
         {/* 왼쪽: 일기 작성 영역 */}
@@ -371,53 +421,75 @@ function Writepage(){
 
         {/* 일기 목록 */}
         {!listLoading && !listError && (
-          // 필터링된 결과(filteredDiaries)의 길이를 기준으로 판단
-          filteredDiaries.length === 0 ? (
-            // 필터링된 결과가 없으면
+          // 필터링 및 정렬된 결과(sortedAndFilteredDiaries)의 길이를 기준으로 판단
+          sortedFilterDiaries.length === 0 ? (
+            // 결과가 없으면
             searchTerm ? ( // 검색어가 있는지 확인
               <p className="text-gray-500 dark:text-gray-400">No diaries found matching your search.</p>
             ) : ( // 검색어가 없으면 (원래 목록이 비어있는 경우)
               <p className="text-gray-500 dark:text-gray-400">No diaries found.</p>
             )
           ) : (
-            <ul className="space-y-4">
-            {filteredDiaries.map((diary) => ( //filteredDiaries 배열을 map으로 순회
-                <li key={diary.id} 
-                onClick={() => handleDiaryClick(diary.id)} // 클릭 시 핸들러 호출
-                className={ //group 클래스로 X(삭제버튼) 을 보이게 함.
-                    `relative group pb-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0 cursor-pointer
-                    hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md p-2
-                    ${
-                      selectDiary === diary.id ? 'bg-blue-100 dark:bg-blue-900' : ''
-                    }`
-                }>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                    {diary.createdAt?.toDate().toLocaleDateString('uk-UK')}
-                </p>
-                {diary.moodScore !== null && (
-                    <p className="text-sm font-semibold mb-1 text-gray-700 dark:text-gray-200">
-                    Mood: {diary.moodScore}
+            // 결과가 있으면 목록 표시 (스크롤 가능한 영역)
+            <div className="flex-grow overflow-y-auto pr-2"> {/* 목록 영역만 스크롤 */}
+              <ul className="space-y-4">
+                {/* sortedAndFilteredDiaries 배열을 map으로 순회 */}
+                {sortedFilterDiaries.map((diary) => (
+                  <li
+                    key={diary.id}
+                    onClick={() => handleDiaryClick(diary.id)} // 상세 보기 클릭
+                    className={ // group 클래스 추가 확인
+                      `relative group pb-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0 cursor-pointer
+                      hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md p-2
+                      ${
+                        selectDiary === diary.id ? 'bg-blue-100 dark:bg-blue-900' : '' // 변수명 확인!
+                      }`
+                    }
+                  >
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                      {/* 날짜 형식 확인! */}
+                      {diary.createdAt?.toDate().toLocaleDateString('ko-KR')}
                     </p>
-                )}
-                <p className="text-base text-gray-800 dark:text-gray-100 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
-                    {diary.userText?.substring(0, 50)}{diary.userText?.length > 50 ? '...' : ''}
-                </p>
-                {/* 삭제버튼은 마우스 올렸을 때만 보이도록 (group-hover 사용) */}
-                <button
-                    onClick={(e) => handleOpenDeleteModal(diary.id, e)} // 삭제 모달 열기, 이벤트 객체 전달
-                    className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700 opacity-0 
-                    group-hover:opacity-100 transition-opacity focus:opacity-100" // 위치, 색상, 호버 효과, 기본 숨김/호버 시 표시
-                    aria-label="Delete diary" // 접근성 레이블
-                >
-                    {/* 간단한 X 아이콘 (SVG 또는 텍스트) */}
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                    {diary.moodScore !== null && (
+                      <p className="text-sm font-semibold mb-1 text-gray-700 dark:text-gray-200">
+                        Mood: {diary.moodScore}
+                      </p>
+                    )}
+                    <p className="text-base text-gray-800 dark:text-gray-100"> {/* 커서 스타일 등은 li에서 처리 */}
+                      {diary.userText?.substring(0, 50)}{diary.userText?.length > 50 ? '...' : ''}
+                    </p>
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={(e) => handleOpenDeleteModal(diary.id, e)}
+                      className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                      aria-label="Delete diary"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}> {/* strokeWidth 조정 */}
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-                </li>
-            ))}
-            </ul>
-        ))}
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        )}
+        {/* '더보기' 버튼 */}
+        {!listLoading && checkMorediaries && ( // 초기 로딩 중 아니고, 더보기 가능할 때만 표시
+          <div className="mt-4 text-center">
+            <button
+              onClick={loadMoreDiaries}
+              disabled={moreLoading} // 더보기 로딩 중 비활성화
+              className={`px-4 py-2 rounded text-sm ${
+                moreLoading
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+              }`}
+            >
+              {moreLoading ? 'Loading more...' : 'Load More'}
+            </button>
+          </div>
+        )}
 
         {/* Tailwind 커스텀 모달  */}
         {modalOpen && ( // isModalOpen 상태가 true일 때만 렌더링
