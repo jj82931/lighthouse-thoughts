@@ -369,8 +369,10 @@ function Writepage() {
   };
   /* --------------------------- User 프로파일 --------------------------------- */
   const handleLogout = async () => {
+    console.log("handleLogout function called!");
     try {
       await logout();
+      console.log("Firebase logout successful");
       navigate("/");
     } catch (error) {
       console.error("logout error:", error);
@@ -456,14 +458,12 @@ function Writepage() {
                   {/* 프로필 설정 / 로그아웃 섹션 */}
                   <div className="px-1 py-1">
                     <MenuItem as="div">
-                      {({ active }) => (
+                      {({ focus }) => (
                         <button
                           // onClick={() => navigate('/profile')} // 나중에 프로필 페이지 만들면 연결
                           disabled // 기능 구현 전까지 비활성화
                           className={`${
-                            active
-                              ? "bg-slate-700 text-white"
-                              : "text-slate-300"
+                            focus ? "bg-slate-700 text-white" : "text-slate-300"
                           } group flex w-full items-center rounded-md px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                           <CogIcon
@@ -474,14 +474,12 @@ function Writepage() {
                         </button>
                       )}
                     </MenuItem>
-                    <MenuItem as="div">
-                      {({ active }) => (
+                    <MenuItem as="Fragment">
+                      {({ focus }) => (
                         <button
                           onClick={handleLogout} // 로그아웃 함수 연결
                           className={`${
-                            active
-                              ? "bg-slate-700 text-white"
-                              : "text-slate-300"
+                            focus ? "bg-slate-700 text-white" : "text-slate-300"
                           } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
                           <ArrowLeftEndOnRectangleIcon
@@ -497,15 +495,13 @@ function Writepage() {
                   {/* 개발자/지원 링크 섹션 */}
                   <div className="px-1 py-1">
                     <MenuItem as="div">
-                      {({ active }) => (
+                      {({ focus }) => (
                         <a
                           href="YOUR_TWITTER_LINK_HERE" // 실제 링크로 변경!
                           target="_blank"
                           rel="noopener noreferrer"
                           className={`${
-                            active
-                              ? "bg-slate-700 text-white"
-                              : "text-slate-300"
+                            focus ? "bg-slate-700 text-white" : "text-slate-300"
                           } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
                           {/* 트위터 아이콘 대신 코드 아이콘 예시 */}
@@ -518,13 +514,11 @@ function Writepage() {
                       )}
                     </MenuItem>
                     <MenuItem as="div">
-                      {({ active }) => (
+                      {({ focus }) => (
                         <a
                           href="mailto:YOUR_SUPPORT_EMAIL_HERE" // 실제 이메일로 변경!
                           className={`${
-                            active
-                              ? "bg-slate-700 text-white"
-                              : "text-slate-300"
+                            focus ? "bg-slate-700 text-white" : "text-slate-300"
                           } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
                           <EnvelopeIcon
