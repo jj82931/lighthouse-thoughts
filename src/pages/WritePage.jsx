@@ -20,6 +20,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 
+// import { id } from "happy-dom/lib/PropertySymbol.js"; //Vite test 용 import
+
 function Writepage() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +30,7 @@ function Writepage() {
   const [analysisResultText, setAnalysisResultText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [hoveredDiaryId, setHoveredDiaryId] = useState(null); //호버된 일기 ID 상태 추가
 
   const [moodScoreDisplay, setMoodScoreDisplay] = useState(null);
 
@@ -97,14 +100,14 @@ function Writepage() {
   const handleAnalyze = async () => {
     setLoading(true);
     setAnalysisResultText("");
-    setError(null);
     setMoodScoreDisplay(null);
-    setDiaryText("");
     setSelectDiary(null);
     setEditing(false);
+    setOriginalDiary("");
 
     try {
-      const { analysisText, moodScore } = await analyzeAI(diaryText);
+      const currentDiaryText = diaryText; // 현재 입력된 텍스트를 변수에 저장
+      const { analysisText, moodScore } = await analyzeAI(currentDiaryText);
 
       setAnalysisResultText(analysisText);
       setMoodScoreDisplay(moodScore); // Mood Score 상태 업데이트!
@@ -116,7 +119,7 @@ function Writepage() {
 
       const diaryData = {
         userId: currentUser.uid, // 사용자 UID 저장
-        userText: diaryText, // 사용자가 입력한 일기 내용 (필드 이름 확인!)
+        userText: currentDiaryText, // 사용자가 입력한 일기 내용 (필드 이름 확인!)
         analysisResult: analysisText, // AI 분석 결과
         createdAt: serverTimestamp(), // 서버 시간 기준으로 생성 시간 저장
         moodScore: moodScore,
@@ -124,9 +127,22 @@ function Writepage() {
       const collectionRef = collection(db, "users", currentUser.uid, "diaries");
       const docRef = await addDoc(collectionRef, diaryData);
       console.log("Firestore worked! Documenmt ID:", docRef.id);
+
+      // 로컬상태 업데이트
+      const newDiaryEntry = {
+        id: docRef.id,
+        ...diaryData,
+        createdAt: Date.now(),
+      };
+      // 기존 diaries 배열의 맨 앞에 새 일기 추가 (최신순 정렬 가정)
+      setDiaries((prevDiaries) => [newDiaryEntry, ...prevDiaries]);
+      setDiaryText("");
     } catch (Error) {
-      setError("Analazing error");
-      console.error(Error);
+      console.error("Analyzing error:", Error);
+      setErrorModal({
+        isOpen: true,
+        message: Error.message || "Analyzing error",
+      });
     } finally {
       setLoading(false);
     }
@@ -188,7 +204,7 @@ function Writepage() {
       setDiaries((prevDiaries) =>
         prevDiaries.map((diary) =>
           diary.id === selectDiary
-            ? { ...diary, ...updatedData, updatedAt: new Date() }
+            ? { ...diary, ...updatedData, updatedAt: Date.now() }
             : diary
         )
       );
@@ -274,9 +290,7 @@ function Writepage() {
       switch (sortBy) {
         case "createdAtAsc":
           // Timestamp 비교 시 toMillis() 사용 권장
-          return (
-            (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)
-          );
+          return (a.createdAt || 0) - (b.createdAt || 0);
         case "moodScoreDesc":
           // moodScore가 null일 경우 맨 뒤로 보내기 (예시)
           return (b.moodScore ?? -1) - (a.moodScore ?? -1);
@@ -285,9 +299,7 @@ function Writepage() {
           return (a.moodScore ?? 101) - (b.moodScore ?? 101);
         case "createdAtDesc":
         default:
-          return (
-            (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
-          );
+          return (b.createdAt || 0) - (a.createdAt || 0);
       }
     });
     return result;
@@ -348,6 +360,7 @@ function Writepage() {
     event.stopPropagation();
     setDiaryToDelete(diaryid);
     setDeleteModalOpen(true);
+    console.log("setDeleteModalOpen(true) called. diaryToDelete:", diaryid); // 확인용 로그
   };
   // 모달 닫는 함수
   const handleCloseModal = () => {
@@ -393,19 +406,22 @@ function Writepage() {
   };
   /* ---------------------------------------------- HTML,jsx ---------------------------------- */
   return (
-    <div className="relative flex min-h-screen px-2 sm:px-4 py-6 sm:py-8 gap-4 sm:gap-6 bg-slate-900 text-slate-300 w-full mx-auto">
+    // --- 전체 컨테이너: 테마 적용 ---
+    <div className="relative flex min-h-screen px-2 sm:px-4 py-6 sm:py-8 gap-4 sm:gap-6 bg-stone-900 text-stone-300 w-full mx-auto">
+      {" "}
+      {/* --bg-primary, --text-secondary */}
       {/* 왼쪽: 일기 작성 영역 */}
-      <div className="relative w-full lg:w-2/3 xl:w-3/4 bg-slate-800 p-4 sm:p-6 rounded-lg shadow-lg">
-        {/* 사용자 메뉴 (아바타 + 드롭다운) 추가*/}
+      <div className="relative w-full lg:w-2/3 xl:w-3/4 bg-stone-800 p-4 sm:p-6 rounded-lg shadow-lg">
+        {" "}
+        {/* --bg-secondary */}
+        {/* 사용자 메뉴 (스타일 유지 또는 약간 조정) */}
         {currentUser && (
-          // 화면 오른쪽 상단에 배치
           <div className="absolute top-6 right-6 z-10">
-            {" "}
-            {/* z-index 추가 */}
             <Menu as="div" className="relative inline-block text-left">
               <div>
-                {/* 아바타 버튼 */}
-                <MenuButton className="flex items-center justify-center w-10 h-10 bg-slate-700 rounded-full hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-500 transition-colors">
+                <MenuButton className="flex items-center justify-center w-10 h-10 bg-stone-700 rounded-full hover:bg-stone-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-stone-800 focus:ring-amber-500 transition-colors">
+                  {" "}
+                  {/* --bg-tertiary, hover, --focus-ring-accent */}
                   {currentUser.photoURL ? (
                     <img
                       className="h-10 w-10 rounded-full object-cover"
@@ -413,19 +429,19 @@ function Writepage() {
                       alt="User avatar"
                     />
                   ) : (
-                    // 사진 없으면 이니셜 또는 기본 아이콘
-                    <span className="text-slate-300 font-semibold text-lg">
+                    <span className="text-stone-300 font-semibold text-lg">
+                      {" "}
+                      {/* --text-secondary */}
                       {currentUser.displayName ? (
                         currentUser.displayName.charAt(0).toUpperCase()
                       ) : (
-                        <UserCircleIcon className="h-7 w-7 text-slate-400" />
-                      )}
+                        <UserCircleIcon className="h-7 w-7 text-stone-400" />
+                      )}{" "}
+                      {/* --text-tertiary */}
                     </span>
                   )}
                 </MenuButton>
               </div>
-
-              {/* 드롭다운 메뉴 패널 (애니메이션 포함) */}
               <Transition
                 as={Fragment}
                 enter="transition ease-out duration-100"
@@ -437,95 +453,83 @@ function Writepage() {
               >
                 <MenuItem
                   as="div"
-                  className="absolute right-0 mt-2 w-64 origin-top-right divide-y divide-slate-700 rounded-md bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                  className="absolute right-0 mt-2 w-64 origin-top-right divide-y 
+                  divide-stone-700 rounded-md bg-stone-800 shadow-lg ring-1 
+                  ring-black ring-opacity-5 focus:outline-none"
                 >
-                  {/* 구독/플랜 정보 섹션 */}
+                  {/* 구독/플랜 정보 */}
                   <div className="px-1 py-1">
                     <MenuItem disabled as="div">
-                      {" "}
-                      {/* 클릭 불가 항목으로 설정 */}
-                      <div className="group flex w-full items-center rounded-md px-3 py-2 text-sm text-slate-400 cursor-default">
+                      <div
+                        className="group flex w-full items-center rounded-md px-3 py-2 text-sm 
+                      text-stone-400 cursor-default"
+                      >
+                        {" "}
+                        {/* --text-tertiary */}
                         <StarIcon
-                          className="mr-3 h-5 w-5 text-cyan-400"
+                          className="mr-3 h-5 w-5 text-amber-400"
                           aria-hidden="true"
-                        />
-                        {/* 실제 구독 정보 표시 로직 필요 */}
+                        />{" "}
+                        {/* --accent-secondary */}
                         Current Plan: Free
                       </div>
                     </MenuItem>
                   </div>
-
-                  {/* 프로필 설정 / 로그아웃 섹션 */}
+                  {/* 프로필/로그아웃 */}
                   <div className="px-1 py-1">
                     <MenuItem as="div">
                       {({ focus }) => (
                         <button
-                          // onClick={() => navigate('/profile')} // 나중에 프로필 페이지 만들면 연결
-                          disabled // 기능 구현 전까지 비활성화
-                          className={`${
-                            focus ? "bg-slate-700 text-white" : "text-slate-300"
-                          } group flex w-full items-center rounded-md px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed`}
+                          disabled
+                          className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
+                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          <CogIcon
-                            className="mr-3 h-5 w-5"
-                            aria-hidden="true"
-                          />
-                          Profile Settings
+                          {" "}
+                          <CogIcon className="mr-3 h-5 w-5" /> Profile
+                          Settings{" "}
                         </button>
-                      )}
+                      )}{" "}
+                      {/* --bg-tertiary, --text-primary, --text-secondary */}
                     </MenuItem>
-                    <MenuItem as="Fragment">
+                    <MenuItem as={Fragment}>
                       {({ focus }) => (
                         <button
-                          onClick={handleLogout} // 로그아웃 함수 연결
-                          className={`${
-                            focus ? "bg-slate-700 text-white" : "text-slate-300"
-                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          onClick={handleLogout}
+                          className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
+                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          <ArrowLeftEndOnRectangleIcon
-                            className="mr-3 h-5 w-5"
-                            aria-hidden="true"
-                          />
-                          Logout
+                          {" "}
+                          <ArrowLeftEndOnRectangleIcon className="mr-3 h-5 w-5" />{" "}
+                          Logout{" "}
                         </button>
                       )}
                     </MenuItem>
                   </div>
-
-                  {/* 개발자/지원 링크 섹션 */}
+                  {/* 개발자/지원 */}
                   <div className="px-1 py-1">
                     <MenuItem as="div">
                       {({ focus }) => (
                         <a
-                          href="YOUR_TWITTER_LINK_HERE" // 실제 링크로 변경!
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`${
-                            focus ? "bg-slate-700 text-white" : "text-slate-300"
-                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          href="YOUR_TWITTER_LINK_HERE"
+                          /* ... */ className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
+                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          {/* 트위터 아이콘 대신 코드 아이콘 예시 */}
-                          <CodeBracketIcon
-                            className="mr-3 h-5 w-5"
-                            aria-hidden="true"
-                          />
-                          Developer Twitter
+                          {" "}
+                          <CodeBracketIcon className="mr-3 h-5 w-5" /> Developer
+                          Twitter{" "}
                         </a>
                       )}
                     </MenuItem>
                     <MenuItem as="div">
                       {({ focus }) => (
                         <a
-                          href="mailto:YOUR_SUPPORT_EMAIL_HERE" // 실제 이메일로 변경!
-                          className={`${
-                            focus ? "bg-slate-700 text-white" : "text-slate-300"
-                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          href="mailto:YOUR_SUPPORT_EMAIL_HERE"
+                          className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
+                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          <EnvelopeIcon
-                            className="mr-3 h-5 w-5"
-                            aria-hidden="true"
-                          />
-                          Support Email
+                          {" "}
+                          <EnvelopeIcon className="mr-3 h-5 w-5" /> Support
+                          Email{" "}
                         </a>
                       )}
                     </MenuItem>
@@ -535,30 +539,32 @@ function Writepage() {
             </Menu>
           </div>
         )}
-        {/* ------------------------------------------- */}
-        <h1 className="text-3xl font-bold mb-5 text-slate-100">Write diary</h1>
-        <p className="text-slate-400 mb-6">What did you think today?</p>
+        {/* ------------------일기 쓰는부분분------------------------- */}
+        <h1 className="text-3xl font-bold mb-5 text-stone-100">
+          Write diary
+        </h1>{" "}
+        {/* --text-primary */}
+        <p className="text-stone-400 mb-6">What did you think today?</p>{" "}
+        {/* --text-tertiary */}
         <textarea
           value={diaryText}
           onChange={handleTextChange}
           placeholder="Write down your thoughts..."
-          rows="30"
+          rows="20"
           disabled={loading}
-          className="w-full p-4 border border-slate-700 rounded-md focus:ring-2 
-          focus:ring-cyan-500 focus:border-transparent bg-slate-700 text-slate-100 placeholder-slate-500 text-base"
+          className="w-full p-4 border border-stone-700 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent 
+          bg-stone-700 text-stone-100 placeholder-stone-500 text-base" // --border-primary, --focus-ring-accent, --bg-tertiary, --text-primary, placeholder 색상 조정
         />
-
-        <div className="mt-4 flex gap-2">
-          {/* 수정할때 */}
+        <div className="mt-5 flex gap-3">
           {editing ? (
             <>
               <button
                 onClick={handleOpenModal}
                 disabled={loading}
-                className={`px-5 py-2 rounded-md text-white font-semibold ... ${
+                className={`px-6 py-2 rounded-md text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-70 ${
                   loading
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-500 hover:bg-green-600 focus:ring-green-500"
+                    ? "bg-gray-500 cursor-not-allowed"
+                    : "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500" // Amber 색상 적용
                 }`}
               >
                 {loading ? "Checking..." : "Update Diary"}
@@ -566,45 +572,50 @@ function Writepage() {
               <button
                 onClick={handleCancelEdit}
                 disabled={loading}
-                className="px-5 py-2 rounded-md bg-gray-300 
-                    hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50"
+                className="px-6 py-2 rounded-md bg-stone-600 hover:bg-stone-700 text-stone-100 focus:outline-none focus:ring-2 
+                focus:ring-stone-500 focus:ring-opacity-50" // --neutral-bg, hover, --text-on-neutral-button, --focus-ring-neutral
               >
-                Cancle
+                Cancel
               </button>
             </>
           ) : (
-            //일반모드
             <button
               onClick={handleAnalyze}
               disabled={loading}
-              className={`px-5 py-2 rounded-md text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-50 ${
+              className={`px-6 py-2 rounded-md text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-70 ${
+                // --text-on-accent
                 loading
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 focus:ring-blue-500"
+                  ? "bg-gray-500 cursor-not-allowed"
+                  : "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500" // --accent-primary, hover, focus-ring
               }`}
             >
               {loading ? "Analyzing..." : "Analyze my thoughts"}
             </button>
           )}
         </div>
-
-        {/* 상태 메시지 */}
+        {/* 상태 메시지, 커스텀 모달때문에 이제 안써도 될건데..위에 뭘 선언했는지 기억안남.. */}
         {error && <p className="mt-3 text-red-600">{error}</p>}
-
         {/* 분석 결과 표시 */}
         {(analysisResultText || moodScoreDisplay !== null) && !loading && (
-          <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-600 dark:border-gray-500">
-            <h2 className="text-xl font-semibold mb-3 text-gray-700 dark:text-white">
+          <div className="mt-8 p-5 border border-stone-700 rounded-lg bg-stone-800 shadow-inner">
+            {" "}
+            {/* --border-primary, --bg-secondary */}
+            <h2 className="text-2xl font-semibold mb-4 text-stone-100">
+              {" "}
+              {/* --text-primary */}
               Result analyzing
             </h2>
             {moodScoreDisplay !== null && (
-              <p className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-100">
+              <p className="font-bold text-lg mb-3 text-stone-200">
+                {" "}
+                {/* --text-secondary 와 primary 사이 */}
                 Mood Score: {moodScoreDisplay} / 100
               </p>
             )}
-            {/* 분석 텍스트 */}
             {analysisResultText && (
-              <div className="text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
+              <div className="text-stone-300 whitespace-pre-wrap leading-relaxed">
+                {" "}
+                {/* --text-secondary */}
                 {analysisResultText}
               </div>
             )}
@@ -614,26 +625,43 @@ function Writepage() {
       {/* 모바일용 '목록 보기' 버튼 (780px 미만에서 보임임) */}
       <button
         onClick={openMobileList}
-        className="block md:hidden fixed top-5 right-5 z-40 p-2 bg-cyan-600 text-white rounded-md shadow-lg 
-        hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
+        // --- 클래스 수정: 아이콘 버튼 스타일, 위치 조정 ---
+        className="block md:hidden fixed top-4 right-4 z-40 p-2 bg-stone-700 
+        text-stone-300 rounded-full shadow-lg hover:bg-stone-600 focus:outline-none focus:ring-2 
+        focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-slate-900" // 배경/텍스트 색상, 포커스 오프셋 조정
         aria-label="Open diary list"
       >
-        Diary list
+        {/* Heroicons의 Bars3Icon 사용 예시 */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="w-6 h-6"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+          />
+        </svg>
       </button>
-
       {/* 오른쪽: 사이드 패널 */}
-      <div className="hidden md:flex md:flex-col md:w-1/3 lg:w-1/3 xl:w-1/4 bg-slate-800 p-4 sm:p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-5 text-slate-100 flex-shrink-0">
+      <div className="hidden md:flex md:flex-col md:w-2/5 lg:w-1/3 xl:w-1/4 bg-stone-800 p-6 rounded-lg shadow-lg">
+        {" "}
+        {/* --bg-secondary */}
+        <h2 className="text-2xl font-bold mb-5 text-stone-100 flex-shrink-0">
+          {" "}
+          {/* --text-primary */}
           Recent Diaries
         </h2>
-
         {/* 정렬 및 검색 UI */}
         <div className="mb-5 flex flex-col sm:flex-row gap-3 flex-shrink-0 items-center">
           <select
             value={sortBy}
             onChange={handleSortChange}
-            className="p-2 border border-slate-700 rounded-md bg-slate-700 text-slate-100 focus:ring-2 
-            focus:ring-cyan-500 focus:border-transparent appearance-none w-full sm:w-32"
+            className="p-2 border border-stone-700 rounded-md bg-stone-700 text-stone-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none w-full sm:w-32" // --border-primary, --bg-tertiary, --text-primary, --focus-ring-accent
           >
             <option value="createdAtDesc">최신순</option>
             <option value="createdAtAsc">오래된순</option>
@@ -642,79 +670,86 @@ function Writepage() {
           </select>
           <input
             type="text"
-            placeholder="Search diaries..."
+            placeholder="Search"
             value={searchTerm}
             onChange={handleSearchChange}
-            className="p-2 border border-slate-700 rounded-md flex-grow min-w-0 bg-slate-700 text-slate-100 
-            placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+            className="p-2 border border-stone-700 rounded-md flex-grow min-w-0 bg-stone-700 
+            text-stone-100 placeholder-stone-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            // --border-primary, --bg-tertiary, --text-primary, placeholder 색상 조정, --focus-ring-accent
           />
         </div>
-
         {/* 로딩 및 에러 표시 */}
         {listLoading && (
-          <p className="text-gray-500 dark:text-gray-400">Loading list...</p>
-        )}
-        {listError && <p className="text-red-600">{listError}</p>}
-
-        {/* 일기 목록 */}
-        {!listLoading &&
-          !listError &&
-          // 필터링 및 정렬된 결과(sortedAndFilteredDiaries)의 길이를 기준으로 판단
-          (sortedFilterDiaries.length === 0 ? (
-            // 결과가 없으면
-            searchTerm ? ( // 검색어가 있는지 확인
-              <p className="text-gray-500 dark:text-gray-400">
-                No diaries found matching your search.
+          <p className="text-stone-400 text-center py-4">Loading list...</p>
+        )}{" "}
+        {/* --text-tertiary */}
+        {listError && (
+          <p className="text-red-500 text-center py-4">{listError}</p>
+        )}{" "}
+        {/* 일기 목록 영역 */}
+        <div className="flex-grow">
+          {" "}
+          {/* 높이 채우기 */}
+          {/* 로딩 및 에러 아닐 때만 렌더링 */}
+          {!listLoading &&
+            !listError &&
+            // 필터링/정렬된 결과 길이 확인
+            (sortedFilterDiaries.length === 0 ? (
+              // 결과 없음 메시지
+              <p className="text-stone-500 text-center py-4">
+                {searchTerm
+                  ? "No diaries found matching your search."
+                  : "No diaries found."}
               </p>
             ) : (
-              // 검색어가 없으면 (원래 목록이 비어있는 경우)
-              <p className="text-gray-500 dark:text-gray-400">
-                No diaries found.
-              </p>
-            )
-          ) : (
-            // 결과가 있으면 목록 표시 (스크롤 가능한 영역)
-            <div className="flex-grow overflow-y-auto pr-2">
-              {" "}
-              {/* 목록 영역만 스크롤 */}
+              // 결과 있으면 목록 렌더링
               <ul className="space-y-4">
-                {/* sortedAndFilteredDiaries 배열을 map으로 순회 */}
                 {sortedFilterDiaries.map((diary) => (
+                  // --- li 요소 수정: onMouseEnter/Leave 추가, group 제거 가능 ---
                   <li
                     key={diary.id}
-                    onClick={() => handleDiaryClick(diary.id)} // 상세 보기 클릭
-                    className={
-                      // group 클래스 추가 확인
-                      `relative group pb-3 border-b border-gray-200 dark:border-gray-600 last:border-b-0 cursor-pointer
-                      hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md p-2
-                      ${
-                        selectDiary === diary.id
-                          ? "bg-blue-100 dark:bg-blue-900"
-                          : "" // 변수명 확인!
-                      }`
-                    }
+                    onClick={() => !loading && handleDiaryClick(diary.id)}
+                    onMouseEnter={() => setHoveredDiaryId(diary.id)} // 마우스 올리면 ID 저장
+                    onMouseLeave={() => setHoveredDiaryId(null)} // 마우스 벗어나면 null
+                    className={`relative pb-3 border-b border-stone-700 last:border-b-0 cursor-pointer
+                      hover:bg-stone-700 rounded-md p-3 transition-colors duration-150
+                      ${selectDiary === diary.id ? "bg-amber-900 bg-opacity-30" : ""}
+                      ${loading ? "opacity-50 cursor-not-allowed" : "hover:bg-stone-700"}`}
                   >
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                      {/* 날짜 형식 확인! */}
-                      {diary.createdAt?.toDate().toLocaleDateString("ko-KR")}
+                    {/* 목록 아이템 내용 (변경 없음) */}
+                    <p className="text-sm text-stone-400 mb-1">
+                      {diary.createdAt
+                        ? new Date(diary.createdAt).toLocaleDateString("au-AU")
+                        : "N/A"}
                     </p>
                     {diary.moodScore !== null && (
-                      <p className="text-sm font-semibold mb-1 text-gray-700 dark:text-gray-200">
+                      <p className="text-sm font-semibold mb-1 text-stone-200">
                         Mood: {diary.moodScore}
                       </p>
                     )}
-                    <p className="text-base text-gray-800 dark:text-gray-100">
-                      {" "}
-                      {/* 커서 스타일 등은 li에서 처리 */}
+                    <p className="text-base text-stone-300">
                       {diary.userText?.substring(0, 50)}
                       {diary.userText?.length > 50 ? "..." : ""}
                     </p>
-                    {/* 삭제 버튼 */}
+
+                    {/* --- 삭제 버튼 수정: 표시 조건 변경 --- */}
                     <button
-                      onClick={(e) => handleOpenDeleteModal(diary.id, e)}
-                      className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                      onClick={(e) =>
+                        !loading && handleOpenDeleteModal(diary.id, e)
+                      } // 로딩 중 클릭 방지
+                      disabled={loading} // 버튼 자체 비활성화
+                      // group-hover 대신 hoveredDiaryId 상태로 opacity 제어
+                      className={`absolute top-2 right-2 p-1 text-stone-500 hover:text-red-500 transition-opacity 
+                        duration-150 focus:opacity-100 
+                        ${
+                          // 로딩 중이거나, 호버되지 않았으면 숨김 (클릭도 방지)
+                          loading || hoveredDiaryId !== diary.id
+                            ? "opacity-0 pointer-events-none"
+                            : "opacity-100" // 로딩 중 아니고 호버되었으면 보임
+                        }`}
                       aria-label="Delete diary"
                     >
+                      {/* SVG 아이콘 (변경 없음) */}
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-4 w-4"
@@ -723,8 +758,6 @@ function Writepage() {
                         stroke="currentColor"
                         strokeWidth={2}
                       >
-                        {" "}
-                        {/* strokeWidth 조정 */}
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -732,121 +765,120 @@ function Writepage() {
                         />
                       </svg>
                     </button>
+                    {/* ------------------------------------ */}
                   </li>
                 ))}
               </ul>
-            </div>
-          ))}
+            ))}
+        </div>
         {/* '더보기' 버튼 */}
-        {!listLoading &&
-          checkMorediaries && ( // 초기 로딩 중 아니고, 더보기 가능할 때만 표시
-            <div className="mt-4 text-center">
-              <button
-                onClick={loadMoreDiaries}
-                disabled={moreLoading} // 더보기 로딩 중 비활성화
-                className={`px-4 py-2 rounded text-sm ${
-                  moreLoading
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-                }`}
-              >
-                {moreLoading ? "Loading more..." : "Load More"}
-              </button>
-            </div>
-          )}
-
+        {!listLoading && checkMorediaries && (
+          <div className="mt-auto pt-4 text-center flex-shrink-0">
+            <button
+              onClick={loadMoreDiaries}
+              disabled={moreLoading}
+              className={`px-4 py-2 rounded text-sm font-medium ${
+                moreLoading
+                  ? "bg-stone-700 text-stone-400 cursor-not-allowed" // --bg-tertiary, --text-tertiary
+                  : "bg-stone-700 hover:bg-stone-600 text-stone-200" // --bg-tertiary, hover, --text-secondary 와 primary 사이
+              }`}
+            >
+              {moreLoading ? "Loading more..." : "Load More"}
+            </button>
+          </div>
+        )}
         {/* Tailwind 커스텀 모달  */}
-        {modalOpen && ( // isModalOpen 상태가 true일 때만 렌더링
-          // 모달 배경 (화면 전체를 덮고 반투명)
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            {/* 모달 컨텐츠 영역 */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-lg w-full">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+        {/* 수정 확인 모달 */}
+        {modalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-lg w-full border border-stone-700">
+              {" "}
+              {/* --bg-secondary, --border-primary */}
+              <h3 className="text-xl font-semibold mb-4 text-stone-100">
                 Confirm Update
-              </h3>
-              <p className="mb-4 text-gray-600 dark:text-gray-300">
+              </h3>{" "}
+              {/* --text-primary */}
+              <p className="mb-4 text-stone-300">
+                {" "}
+                {/* --text-secondary */}
                 The following analysis and mood score will be saved based on
                 your updated text. Do you want to proceed?
               </p>
-
-              {/* 변경될 내용 미리보기 */}
-              <div className="mb-4 p-3 border border-gray-200 rounded bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
-                <p className="font-semibold text-gray-700 dark:text-gray-200">
-                  New Mood Score:
-                </p>
-                <p className="mb-2 dark:text-gray-100">
+              <div className="mb-4 p-3 border border-stone-700 rounded bg-stone-900">
+                {" "}
+                {/* --border-primary, --bg-primary */}
+                <p className="font-semibold text-stone-200">New Mood Score:</p>
+                <p className="mb-2 text-stone-100">
                   {tempAnalysis.score !== null
                     ? `${tempAnalysis.score} / 100`
                     : "N/A"}
                 </p>
-                <p className="font-semibold text-gray-700 dark:text-gray-200">
-                  New Analysis:
-                </p>
-                <p className="text-sm whitespace-pre-wrap dark:text-gray-100">
+                <p className="font-semibold text-stone-200">New Analysis:</p>
+                <p className="text-sm whitespace-pre-wrap text-stone-100">
                   {tempAnalysis.text || "Analysis not available."}
                 </p>
               </div>
-
-              {/* 모달 버튼 영역 */}
               <div className="flex justify-end gap-3">
                 <button
-                  onClick={handleCloseModal} // 모달 닫기 함수 연결
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 text-gray-800"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 rounded bg-stone-600 hover:bg-stone-700 text-stone-100"
                 >
                   Cancel
-                </button>
+                </button>{" "}
+                {/* --neutral-bg, hover, --text-on-neutral-button */}
                 <button
-                  onClick={handleUpdateDiary} // 실제 업데이트 함수 연결
-                  className="px-4 py-2 rounded bg-green-500 hover:bg-green-600 text-white font-semibold"
+                  onClick={handleUpdateDiary}
+                  className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                 >
                   Confirm Update
-                </button>
+                </button>{" "}
+                {/* --positive-bg, hover, --text-on-accent */}
               </div>
             </div>
           </div>
         )}
         {/* 에러 모달 */}
         {errorModal.isOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
-              <h3 className="text-lg font-semibold mb-4 text-red-600">
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-700">
+              <h3 className="text-lg font-semibold mb-4 text-red-500">
                 Warning
-              </h3>
-              <p className="mb-4 text-gray-700 dark:text-gray-200">
-                {errorModal.message}
-              </p>
+              </h3>{" "}
+              {/* --error */}
+              <p className="mb-4 text-stone-200">{errorModal.message}</p>
               <div className="flex justify-end">
                 <button
                   onClick={closeErrorModal}
-                  className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white"
+                  className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white"
                 >
                   Close
-                </button>
+                </button>{" "}
+                {/* --destructive-bg, hover, --text-on-destructive-button */}
               </div>
             </div>
           </div>
         )}
         {/* 삭제 확인 모달 */}
         {deleteModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-700">
+              <h3 className="text-lg font-semibold mb-4 text-stone-100">
                 Confirm Deletion
               </h3>
-              <p className="mb-6 text-gray-600 dark:text-gray-300">
+              <p className="mb-6 text-stone-300">
                 Are you sure you want to delete this diary entry? This action
                 cannot be undone.
               </p>
               <div className="flex justify-end gap-3">
                 <button
                   onClick={handleCloseDeleteModal}
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 text-gray-800"
+                  className="px-4 py-2 rounded bg-stone-600 hover:bg-stone-700 text-stone-100"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleConfirmDelete} // 최종 삭제 함수 연결
-                  className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white font-semibold"
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
                 >
                   Delete
                 </button>
@@ -854,32 +886,30 @@ function Writepage() {
             </div>
           </div>
         )}
-        {/* --- 정보/성공 모달 JSX 추가 --- */}
+        {/* 정보/성공 모달 */}
         {infoModal.isOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
-              {/* type에 따라 제목 변경 가능 */}
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-700">
               <h3
-                className={`text-lg font-semibold mb-4 ${infoModal.type === "success" ? "text-green-600" : "text-blue-600"}`}
+                className={`text-lg font-semibold mb-4 ${infoModal.type === "success" ? "text-emerald-500" : "text-sky-500"}`}
               >
+                {" "}
+                {/* --success, --info */}
                 {infoModal.type === "success" ? "Success" : "Information"}
               </h3>
-              <p className="mb-4 text-gray-700 dark:text-gray-200">
-                {infoModal.message}
-              </p>
+              <p className="mb-4 text-stone-200">{infoModal.message}</p>
               <div className="flex justify-end">
                 <button
                   onClick={closeInfoModal}
-                  // type에 따라 버튼 색상 변경 가능
-                  className={`px-4 py-2 rounded text-white ${infoModal.type === "success" ? "bg-green-500 hover:bg-green-600" : "bg-blue-500 hover:bg-blue-600"}`}
+                  className={`px-4 py-2 rounded text-white ${infoModal.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-sky-600 hover:bg-sky-700"}`}
                 >
                   OK
-                </button>
+                </button>{" "}
+                {/* --positive-bg, --info-bg */}
               </div>
             </div>
           </div>
         )}
-
         {/* MobileDiaryList 컴포넌트 렌더링 및 props 전달 --- */}
         <MobileDiaryList
           isOpen={mobileListOpen}
@@ -903,7 +933,7 @@ function Writepage() {
             // closeMobileList(); // 필요 시 주석 해제
           }}
           loadMoreDiaries={loadMoreDiaries}
-          hasMoreDiaries={checkMorediaries} // 사용자 정의 상태 변수 사용
+          checkMorediaries={checkMorediaries} // 사용자 정의 상태 변수 사용
           isMoreLoading={moreLoading}
         />
         {/* --------------------------- */}
