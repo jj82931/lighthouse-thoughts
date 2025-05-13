@@ -26,10 +26,16 @@ function MobileDiaryList({
   loadMoreDiaries,
   hasMoreDiaries,
   isMoreLoading,
+  mobileLoading,
 }) {
+  const handleClick = (diaryId) => {
+    if (mobileLoading) return;
+    handleDiaryItemClick(diaryId);
+  };
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="relative z-40" onClose={onClose}>
         {/* 배경 오버레이 */}
         <TransitionChild
           as="div"
@@ -124,13 +130,13 @@ function MobileDiaryList({
                         {diaries.map((diary) => (
                           <li
                             key={diary.id}
-                            onClick={() => {
-                              handleDiaryItemClick(diary.id);
-                              onClose();
-                            }}
-                            className={`relative group pb-3 border-b border-stone-700 last:border-b-0 cursor-pointer 
-                              hover:bg-stone-700 rounded-md p-3 transition-colors duration-150 
-                              ${selectedDiaryId === diary.id ? "bg-amber-600 bg-opacity-40" : ""}`}
+                            onClick={() => handleClick(diary.id)}
+                            className={`
+                              ${mobileLoading ? "opacity-50 pointer-events-none cursor-not-allowed" : ""}
+                              relative group pb-3 border-b border-stone-700 last:border-b-0 rounded-md p-3 transition-colors duration-150
+                              ${selectedDiaryId === diary.id ? "bg-amber-600 bg-opacity-40" : ""}
+                              ${!mobileLoading ? "cursor-pointer hover:bg-stone-700" : ""}
+                            `}
                           >
                             <p className="text-sm text-stone-400 mb-1">
                               {diary.createdAt
@@ -151,10 +157,18 @@ function MobileDiaryList({
                             {/* 삭제 버튼 */}
                             <button
                               onClick={(e) => {
+                                e.stopPropagation();
+                                if (mobileLoading) return;
                                 handleOpenDeleteModal(diary.id, e);
                               }}
-                              className="absolute top-2 right-2 p-1 text-stone-500 hover:text-red-500 opacity-0 group-hover:opacity-100 
-                              transition-opacity focus:opacity-100"
+                              className={`
+                                absolute top-2 right-2 p-1 transition-opacity focus:opacity-100
+                                ${
+                                  mobileLoading
+                                    ? "opacity-0 pointer-events-none"
+                                    : "text-stone-500 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                                }
+                              `}
                               aria-label="Delete diary"
                             >
                               <XMarkIcon
@@ -168,16 +182,14 @@ function MobileDiaryList({
                       </ul>
                     ))}
                 </div>
-                {/* 더보기 버튼 */}
+                {/* ➕ --- 더보기 버튼 추가 --- */}
                 {!listLoading && hasMoreDiaries && (
                   <div className="mt-auto pt-4 text-center flex-shrink-0">
-                    {" "}
-                    {/* 하단 고정 */}
                     <button
                       onClick={loadMoreDiaries}
-                      disabled={isMoreLoading}
+                      disabled={isMoreLoading || mobileLoading}
                       className={`px-4 py-2 rounded text-sm font-medium 
-                        ${isMoreLoading ? "bg-stone-700 text-stone-400 cursor-not-allowed" : "bg-stone-700 hover:bg-stone-600 text-stone-200"}`}
+                        ${isMoreLoading || mobileLoading ? "bg-stone-700 text-stone-400 cursor-not-allowed" : "bg-stone-700 hover:bg-stone-600 text-stone-200"}`}
                     >
                       {isMoreLoading ? "Loading..." : "Load More"}
                     </button>

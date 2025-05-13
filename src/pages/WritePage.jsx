@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo, Fragment } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  Fragment,
+  useCallback,
+} from "react";
 import { analyzeAI } from "../services/ai";
 import { useAuth } from "../contexts/Auth";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -20,16 +26,37 @@ import {
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 
+// Redux 관련 훅 및 액션 import
+import { useDispatch, useSelector } from "react-redux";
+import {
+  openUpdateModal,
+  closeInfoModal,
+  openDeleteModal,
+  closeErrorModal,
+  openInfoModal,
+  openErrorModal,
+  resetUpdateConfirmed,
+  resetDeleteConfirmed,
+} from "../store/modalSlice.js";
+
 // import { id } from "happy-dom/lib/PropertySymbol.js"; //Vite test 용 import
 
 function Writepage() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  // --------------------Redux 관련------------------------
+  const dispatch = useDispatch(); //useDispatch 훅
+  const {
+    updateConfirmed,
+    deleteConfirmed,
+    tempAnalysisData,
+    diaryToDeleteId,
+  } = useSelector((state) => state.modal);
+  // -------------------------------------------------------
 
   const [diaryText, setDiaryText] = useState(""); //일기내용 저장할 상태
   const [analysisResultText, setAnalysisResultText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [hoveredDiaryId, setHoveredDiaryId] = useState(null); //호버된 일기 ID 상태 추가
 
   const [moodScoreDisplay, setMoodScoreDisplay] = useState(null);
@@ -40,7 +67,6 @@ function Writepage() {
   const [searchTerm, setSearchTerm] = useState(""); //검색어 상태
   const [editing, setEditing] = useState(false); //글 수정 상태
   const [originalDiary, setOriginalDiary] = useState(""); //원본글과 변경된글을 저장하기 위한 상태변수
-  const [diaryToDelete, setDiaryToDelete] = useState(null); // 삭제할 일기 ID 저장
   const [lastVisibleDiary, setLastVisibleDiary] = useState(null);
   const [checkMorediaries, setCheckMoreDiaries] = useState(false);
 
@@ -48,18 +74,113 @@ function Writepage() {
   const [listError, setListError] = useState(null); // 목록 로딩 에러
   const [moreLoading, setMoreLoading] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false); //모달 열림/닫힘 상태
-  const [tempAnalysis, setTempAnalysis] = useState({ text: "", score: null }); //모달에 표시할 임시 데이터 상태
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false); //삭제 모달 상태변수
-  const [infoModal, setInfoModal] = useState({
-    isOpen: false,
-    message: "",
-    type: "info",
-  }); //setstatus 대체할 모달달
-  const [errorModal, setErrorModal] = useState({ isOpen: false, message: "" });
-
+  // ----------모바일 환경-----------
   const [mobileListOpen, setMobileListOpen] = useState(false);
 
+  const handleCancelEdit = useCallback(() => {
+    setEditing(false);
+    setSelectDiary(null);
+    setDiaryText("");
+    setAnalysisResultText("");
+    setMoodScoreDisplay(null);
+    dispatch(closeErrorModal()); // 혹시 열려있을 수 있는 에러 모달 닫기
+    setOriginalDiary("");
+  }, [dispatch]);
+
+  // --- 실제 업데이트 로직 (useCallback으로 감싸고, Redux 상태 사용) ---
+  const performUpdateDiary = useCallback(async () => {
+    // selectDiary는 로컬 상태, tempAnalysisData는 Redux 상태
+    if (!currentUser || !selectDiary || !tempAnalysisData) {
+      console.error("Update prerequisites not met:", {
+        currentUser,
+        selectDiary,
+        tempAnalysisData,
+      });
+      dispatch(resetUpdateConfirmed());
+      return;
+    }
+    setLoading(true);
+    dispatch(closeErrorModal());
+
+    const dataToUpdate = {
+      userText: diaryText,
+      analysisResult: tempAnalysisData.text,
+      moodScore: tempAnalysisData.score,
+    };
+    try {
+      await updateDiaryEntry(currentUser.uid, selectDiary, dataToUpdate);
+
+      setDiaries((prev) =>
+        prev.map((d) =>
+          d.id === selectDiary
+            ? { ...d, ...dataToUpdate, updatedAt: new Date() }
+            : d
+        )
+      );
+      handleCancelEdit();
+
+      dispatch(
+        openInfoModal({
+          message: "Successfully diary updated on DB.",
+          type: "success",
+        })
+      );
+    } catch (error) {
+      console.error("Updating error:", error);
+      dispatch(openErrorModal(error.message || "Updating error"));
+    } finally {
+      setLoading(false);
+      dispatch(resetUpdateConfirmed());
+    }
+  }, [
+    currentUser,
+    selectDiary,
+    tempAnalysisData,
+    diaryText,
+    dispatch,
+    handleCancelEdit,
+  ]);
+
+  // --- 실제 삭제 로직 (useCallback으로 감싸고, Redux 상태 사용) ---
+  const performDeleteDiary = useCallback(async () => {
+    // diaryToDeleteId는 Redux 상태
+    if (!currentUser || !diaryToDeleteId) {
+      console.error("Delete prerequisites not met:", {
+        currentUser,
+        diaryToDeleteId,
+      });
+      dispatch(resetDeleteConfirmed());
+      return;
+    }
+    setLoading(true);
+    dispatch(closeErrorModal());
+
+    try {
+      await deleteDiaryEntry(currentUser.uid, diaryToDeleteId);
+      setDiaries((prev) =>
+        prev.filter((diary) => diary.id !== diaryToDeleteId)
+      );
+      if (selectDiary === diaryToDeleteId) {
+        handleCancelEdit();
+      }
+
+      dispatch(
+        openInfoModal({
+          message: "Diary has been deleted successfully.",
+          type: "success",
+        })
+      );
+    } catch (error) {
+      console.error("delete error:", error);
+      dispatch(openErrorModal(error.message || "Unknown error deletion error"));
+    } finally {
+      setLoading(false);
+      dispatch(resetDeleteConfirmed());
+    }
+  }, [currentUser, diaryToDeleteId, selectDiary, dispatch, handleCancelEdit]);
+  // -------------------------------------------------------------------
+
+  //------------------UseEffect 부분-------------------------
   useEffect(() => {
     if (currentUser) {
       setListLoading(true);
@@ -91,169 +212,166 @@ function Writepage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
+  // --- 업데이트 확인 상태 감지 useEffect ---
+  useEffect(() => {
+    if (updateConfirmed) {
+      performUpdateDiary();
+    }
+  }, [updateConfirmed, performUpdateDiary]);
 
+  // --- 삭제 확인 상태 감지 useEffect ---
+  useEffect(() => {
+    if (deleteConfirmed) {
+      performDeleteDiary();
+    }
+  }, [deleteConfirmed, performDeleteDiary]);
+  // -------------------------------------
+
+  // --- 이벤트 핸들러들 ---
   const handleTextChange = (event) => {
-    // textarea 내용이 변경될 때 호출될 함수
-    setDiaryText(event.target.value); // 입력된 값으로 diaryText 상태 업데이트
+    setDiaryText(event.target.value);
   };
+  const handleSortChange = (event) => {
+    setSortBy(event.target.value);
+  };
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+  const openMobileList = () => {
+    setMobileListOpen(true);
+  };
+  const closeMobileList = () => {
+    setMobileListOpen(false);
+  };
+  // ----------------------
 
   const handleAnalyze = async () => {
+    const textToAnalyze = diaryText;
+    if (!currentUser) {
+      dispatch(openErrorModal("Login needed!!"));
+      return;
+    }
+
+    if (!textToAnalyze.trim()) {
+      dispatch(
+        openErrorModal("Write diary first! Don't be afraid of expression!")
+      );
+      return;
+    }
+    dispatch(closeErrorModal()); // 이전 에러 모달 닫기
     setLoading(true);
     setAnalysisResultText("");
     setMoodScoreDisplay(null);
     setSelectDiary(null);
     setEditing(false);
     setOriginalDiary("");
+    dispatch(closeErrorModal());
 
     try {
-      const currentDiaryText = diaryText; // 현재 입력된 텍스트를 변수에 저장
-      const { analysisText, moodScore } = await analyzeAI(currentDiaryText);
-
+      const { analysisText, moodScore } = await analyzeAI(textToAnalyze);
       setAnalysisResultText(analysisText);
-      setMoodScoreDisplay(moodScore); // Mood Score 상태 업데이트!
-      setInfoModal({
-        isOpen: true,
-        message: "Diary is stored successfully in DB.",
-        type: "success",
-      });
+      setMoodScoreDisplay(moodScore);
 
       const diaryData = {
-        userId: currentUser.uid, // 사용자 UID 저장
-        userText: currentDiaryText, // 사용자가 입력한 일기 내용 (필드 이름 확인!)
-        analysisResult: analysisText, // AI 분석 결과
-        createdAt: serverTimestamp(), // 서버 시간 기준으로 생성 시간 저장
+        userId: currentUser.uid,
+        userText: textToAnalyze,
+        analysisResult: analysisText,
+        createdAt: serverTimestamp(),
         moodScore: moodScore,
       };
+
       const collectionRef = collection(db, "users", currentUser.uid, "diaries");
       const docRef = await addDoc(collectionRef, diaryData);
-      console.log("Firestore worked! Documenmt ID:", docRef.id);
+      console.log("Firestore worked! Document ID:", docRef.id);
 
-      // 로컬상태 업데이트
-      const newDiaryEntry = {
-        id: docRef.id,
-        ...diaryData,
-        createdAt: Date.now(),
-      };
-      // 기존 diaries 배열의 맨 앞에 새 일기 추가 (최신순 정렬 가정)
-      setDiaries((prevDiaries) => [newDiaryEntry, ...prevDiaries]);
+      setDiaries((prev) => [
+        { id: docRef.id, ...diaryData, createdAt: Date.now() },
+        ...prev,
+      ]);
       setDiaryText("");
-    } catch (Error) {
-      console.error("Analyzing error:", Error);
-      setErrorModal({
-        isOpen: true,
-        message: Error.message || "Analyzing error",
-      });
+      dispatch(
+        openInfoModal({
+          message: "Diary is stored successfully in DB.",
+          type: "success",
+        })
+      );
+    } catch (err) {
+      console.error("Analyzing error:", err);
+      dispatch(openErrorModal(err.message || "Analyzing error"));
     } finally {
       setLoading(false);
     }
   };
+
   // 다이어리 선택 핸들러
   const handleDiaryClick = (diaryid) => {
     const selectedDiary = diaries.find((diary) => diary.id === diaryid);
-
     if (selectedDiary) {
-      setDiaryText(selectedDiary.userText || ""); // userText가 없을 경우 대비
+      setDiaryText(selectedDiary.userText || "");
       setOriginalDiary(selectedDiary.userText || "");
-      setAnalysisResultText(selectedDiary.analysisResult || ""); // analysisResult가 없을 경우 대비
-      // moodScore가 0일 수도 있으므로 undefined 체크
+      setAnalysisResultText(selectedDiary.analysisResult || "");
       setMoodScoreDisplay(
         selectedDiary.moodScore !== undefined ? selectedDiary.moodScore : null
       );
       setSelectDiary(diaryid);
-      setEditing(true); //리스트에서 글 선택시 수정모드로 진입입
-
-      setError(null);
+      setEditing(true);
+      dispatch(closeErrorModal()); // 에러 모달 닫기
     } else {
       console.error("Cannot find diary which you selected", diaryid);
     }
   };
-  // 검색어 변경 핸들러 추가
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-  };
-  // cancel 버튼 핸들러
-  const handleCancelEdit = () => {
-    setEditing(false);
-    setSelectDiary(null);
-    setDiaryText("");
-    setAnalysisResultText("");
-    setMoodScoreDisplay(null);
-    setError(null);
-  };
 
-  // update 후에 DB 업데이트 핸들러
-  const handleUpdateDiary = async () => {
-    setModalOpen(false); // 모달 닫기
-    setLoading(true); // 로딩 시작
-    setError(null);
+  const handleOpenModal = async () => {
+    if (!selectDiary) {
+      dispatch(openErrorModal("Please select a diary to update."));
+      return;
+    }
+    if (!currentUser) {
+      dispatch(openErrorModal("Login required."));
+      return;
+    }
+    const textToUpdate = diaryText;
+    if (!textToUpdate.trim()) {
+      dispatch(openErrorModal("Diary content cannot be empty."));
+      return;
+    }
+    if (textToUpdate === originalDiary) {
+      dispatch(openErrorModal("Content has not been changed."));
+      return;
+    }
 
+    setLoading(true);
+    dispatch(closeInfoModal());
+    dispatch(closeErrorModal());
     try {
-      const updatedData = {
-        userText: diaryText,
-        analysisResult: tempAnalysis.text,
-        moodScore: tempAnalysis.score,
-        // updatedAt: serverTimestamp() // firestoreService에서 추가됨
-      };
-
-      await updateDiaryEntry(currentUser.uid, selectDiary, updatedData);
-      setInfoModal({
-        isOpen: true,
-        message: "Successfully diary updated on DB.",
-        type: "success",
-      });
-      setDiaries((prevDiaries) =>
-        prevDiaries.map((diary) =>
-          diary.id === selectDiary
-            ? { ...diary, ...updatedData, updatedAt: Date.now() }
-            : diary
-        )
-      );
-      setEditing(false);
-      setSelectDiary(null);
-      setDiaryText("");
-      setAnalysisResultText("");
-      setMoodScoreDisplay(null);
-      setTempAnalysis({ text: "", score: null }); // 임시 데이터 초기화
+      const { analysisText: newAnalysisText, moodScore: newMoodScore } =
+        await analyzeAI(textToUpdate);
+      dispatch(openUpdateModal({ text: newAnalysisText, score: newMoodScore }));
     } catch (error) {
-      console.error("Updating error:", error);
-      setError(error.message || "Updating error");
+      console.error("Analyzed error on modal:", error);
+      dispatch(openErrorModal(error.message || "Re-analyzing error"));
     } finally {
       setLoading(false);
     }
   };
-  const handleConfirmDelete = async () => {
-    if (!diaryToDelete || !currentUser) return;
-    setDeleteModalOpen(false); // 모달 닫기
-    setLoading(true); // 로딩 시작 (버튼 비활성화 등)
-    setError(null);
 
-    try {
-      await deleteDiaryEntry(currentUser.uid, diaryToDelete);
-      setInfoModal({
-        isOpen: true,
-        message: "Diary has been deleted successfully.",
-        type: "success",
-      });
-      //로컬 diaries 상태에서도 해당 항목 제거
-      setDiaries((prevDiaries) =>
-        prevDiaries.filter((diary) => diary.id !== diaryToDelete)
-      );
-      if (selectDiary === diaryToDelete) {
-        // 만약 삭제한 일기가 현재 선택/수정 중인 일기였다면 상태 초기화
-        handleCancelEdit(); // 수정 취소 함수 재활용
-      }
-    } catch (error) {
-      console.error("delete error:", error);
-      setError(error.message || "Unknown error deletion error");
-    } finally {
-      setLoading(false); // 로딩 종료
-      setDiaryToDelete(null); // 삭제 대상 ID 초기화
-    }
+  // --- handleOpenDeleteModal (삭제 확인 모달 열기 - Redux 액션 디스패치) ---
+  const handleOpenDeleteModal = (diaryid, event) => {
+    event.stopPropagation();
+    dispatch(openDeleteModal(diaryid));
   };
-
-  // --- 정렬 변경 핸들러 ---
-  const handleSortChange = (event) => {
-    setSortBy(event.target.value);
+  /* --------------------------- User 프로파일 --------------------------------- */
+  // --- handleLogout (Redux 액션 사용) ---
+  const handleLogout = async () => {
+    console.log("[LOGOUT] handleLogout called");
+    try {
+      await logout();
+      console.log("Firebase logout successful");
+      navigate("/");
+    } catch (error) {
+      console.error("logout error:", error);
+      dispatch(openErrorModal("Logout failed. Please try again."));
+    }
   };
 
   // ------ 리스트 더보기(more) 핸들러-----
@@ -305,105 +423,6 @@ function Writepage() {
     return result;
   }, [diaries, searchTerm, sortBy]);
 
-  /* ---------------------------------------------- 모달함수---------------------------------- */
-  // 모달 여는 함수, 에러모달까지 같이 처리함함
-  const handleOpenModal = async () => {
-    // 1. 일기가 선택되었는지 확인 (수정 모드 확인)
-    if (!selectDiary) {
-      setErrorModal({
-        isOpen: true,
-        message: "Please select a diary to update.",
-      });
-      return;
-    }
-    // 2. 로그인 상태 확인
-    if (!currentUser) {
-      setErrorModal({ isOpen: true, message: "Login required." });
-      return;
-    }
-    // 3. 내용이 비어있는지 확인
-    if (!diaryText.trim()) {
-      setErrorModal({
-        isOpen: true,
-        message: "Diary content cannot be empty.",
-      });
-      return;
-    }
-    // 4. 내용이 변경되었는지 확인
-    if (diaryText === originalDiary) {
-      setErrorModal({ isOpen: true, message: "Content has not been changed." });
-      return;
-    }
-
-    // 모달을 열기 전에 AI 재분석 실행 근데 모달 안에서 할 수도 있음
-    setLoading(true); // 로딩 표시
-    setError(null);
-    setInfoModal({ isOpen: false, message: "", type: "info" });
-
-    try {
-      // 임시 상태에 새로운 분석 결과 저장
-      const { analysisText: newAnalysisText, moodScore: newMoodScore } =
-        await analyzeAI(diaryText);
-      console.log("AI 재분석 점수 (newMoodScore):", newMoodScore);
-
-      setTempAnalysis({ text: newAnalysisText, score: newMoodScore });
-      setModalOpen(true); // 분석 완료 후 모달 열기
-    } catch (error) {
-      console.error("Analayzed error on modal:", error);
-      setError(error.message || "Re-analayzing error");
-    } finally {
-      setLoading(false);
-    }
-  };
-  //삭제 모달 열기 함수
-  const handleOpenDeleteModal = (diaryid, event) => {
-    event.stopPropagation();
-    setDiaryToDelete(diaryid);
-    setDeleteModalOpen(true);
-    console.log("setDeleteModalOpen(true) called. diaryToDelete:", diaryid); // 확인용 로그
-  };
-  // 모달 닫는 함수
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setTempAnalysis({ text: "", score: null }); // 임시 데이터 초기화
-  };
-  // 에러 모달 닫기 함수
-  const closeErrorModal = () => {
-    setErrorModal({ isOpen: false, message: "" });
-  };
-  // 삭제모달 닫기 핸들러
-  const handleCloseDeleteModal = () => {
-    setDeleteModalOpen(false);
-    setDiaryToDelete(null);
-  };
-  // setstatus 변수 대체하는 모달 닫기 함수
-  const closeInfoModal = () => {
-    setInfoModal({ isOpen: false, message: "", type: "info" });
-  };
-  /* --------------------------- User 프로파일 --------------------------------- */
-  const handleLogout = async () => {
-    console.log("handleLogout function called!");
-    try {
-      await logout();
-      console.log("Firebase logout successful");
-      navigate("/");
-    } catch (error) {
-      console.error("logout error:", error);
-      setErrorModal({
-        isOpen: true,
-        message: "Logout failed. Please try again.",
-      });
-    }
-  };
-  /* ---------------------------------------------- 모바일 UI---------------------------------- */
-  // 모바일 사이드 일기리스트 열기함수
-  const openMobileList = () => {
-    setMobileListOpen(true);
-  };
-  // 모바일 사이드 일기리스트 닫기함수
-  const closeMobileList = () => {
-    setMobileListOpen(false);
-  };
   /* ---------------------------------------------- HTML,jsx ---------------------------------- */
   return (
     // --- 전체 컨테이너: 테마 적용 ---
@@ -419,9 +438,7 @@ function Writepage() {
           <div className="absolute top-6 right-6 z-10">
             <Menu as="div" className="relative inline-block text-left">
               <div>
-                <MenuButton className="flex items-center justify-center w-10 h-10 bg-stone-700 rounded-full hover:bg-stone-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-stone-800 focus:ring-amber-500 transition-colors">
-                  {" "}
-                  {/* --bg-tertiary, hover, --focus-ring-accent */}
+                <Menu.Button className="flex items-center justify-center w-10 h-10 bg-stone-700 rounded-full hover:bg-stone-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-stone-800 focus:ring-amber-500 transition-colors">
                   {currentUser.photoURL ? (
                     <img
                       className="h-10 w-10 rounded-full object-cover"
@@ -430,18 +447,16 @@ function Writepage() {
                     />
                   ) : (
                     <span className="text-stone-300 font-semibold text-lg">
-                      {" "}
-                      {/* --text-secondary */}
                       {currentUser.displayName ? (
                         currentUser.displayName.charAt(0).toUpperCase()
                       ) : (
                         <UserCircleIcon className="h-7 w-7 text-stone-400" />
-                      )}{" "}
-                      {/* --text-tertiary */}
+                      )}
                     </span>
                   )}
-                </MenuButton>
+                </Menu.Button>
               </div>
+
               <Transition
                 as={Fragment}
                 enter="transition ease-out duration-100"
@@ -451,90 +466,85 @@ function Writepage() {
                 leaveFrom="transform opacity-100 scale-100"
                 leaveTo="transform opacity-0 scale-95"
               >
-                <MenuItem
-                  as="div"
-                  className="absolute right-0 mt-2 w-64 origin-top-right divide-y 
-                  divide-stone-700 rounded-md bg-stone-800 shadow-lg ring-1 
-                  ring-black ring-opacity-5 focus:outline-none"
-                >
+                <Menu.Items className="absolute right-0 mt-2 w-64 origin-top-right divide-y divide-stone-700 rounded-md bg-stone-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
                   {/* 구독/플랜 정보 */}
                   <div className="px-1 py-1">
-                    <MenuItem disabled as="div">
-                      <div
-                        className="group flex w-full items-center rounded-md px-3 py-2 text-sm 
-                      text-stone-400 cursor-default"
-                      >
-                        {" "}
-                        {/* --text-tertiary */}
-                        <StarIcon
-                          className="mr-3 h-5 w-5 text-amber-400"
-                          aria-hidden="true"
-                        />{" "}
-                        {/* --accent-secondary */}
-                        Current Plan: Free
-                      </div>
-                    </MenuItem>
+                    <div className="group flex w-full items-center rounded-md px-3 py-2 text-sm text-stone-400 cursor-default">
+                      <StarIcon className="mr-3 h-5 w-5 text-amber-400" />
+                      Current Plan: Free
+                    </div>
                   </div>
+
                   {/* 프로필/로그아웃 */}
                   <div className="px-1 py-1">
-                    <MenuItem as="div">
-                      {({ focus }) => (
+                    <Menu.Item>
+                      {({ active }) => (
                         <button
                           disabled
-                          className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
-                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          className={`${
+                            active
+                              ? "bg-stone-700 text-white"
+                              : "text-stone-300"
+                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          {" "}
-                          <CogIcon className="mr-3 h-5 w-5" /> Profile
-                          Settings{" "}
+                          <CogIcon className="mr-3 h-5 w-5" />
+                          Profile Settings
                         </button>
-                      )}{" "}
-                      {/* --bg-tertiary, --text-primary, --text-secondary */}
-                    </MenuItem>
-                    <MenuItem as={Fragment}>
-                      {({ focus }) => (
+                      )}
+                    </Menu.Item>
+
+                    <Menu.Item>
+                      {({ active }) => (
                         <button
                           onClick={handleLogout}
-                          className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
-                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          className={`${
+                            active
+                              ? "bg-stone-700 text-white"
+                              : "text-stone-300"
+                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          {" "}
-                          <ArrowLeftEndOnRectangleIcon className="mr-3 h-5 w-5" />{" "}
-                          Logout{" "}
+                          <ArrowLeftEndOnRectangleIcon className="mr-3 h-5 w-5" />
+                          Logout
                         </button>
                       )}
-                    </MenuItem>
+                    </Menu.Item>
                   </div>
+
                   {/* 개발자/지원 */}
                   <div className="px-1 py-1">
-                    <MenuItem as="div">
-                      {({ focus }) => (
+                    <Menu.Item>
+                      {({ active }) => (
                         <a
                           href="YOUR_TWITTER_LINK_HERE"
-                          /* ... */ className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
-                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          className={`${
+                            active
+                              ? "bg-stone-700 text-white"
+                              : "text-stone-300"
+                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          {" "}
-                          <CodeBracketIcon className="mr-3 h-5 w-5" /> Developer
-                          Twitter{" "}
+                          <CodeBracketIcon className="mr-3 h-5 w-5" />
+                          Developer Twitter
                         </a>
                       )}
-                    </MenuItem>
-                    <MenuItem as="div">
-                      {({ focus }) => (
+                    </Menu.Item>
+
+                    <Menu.Item>
+                      {({ active }) => (
                         <a
                           href="mailto:YOUR_SUPPORT_EMAIL_HERE"
-                          className={`${focus ? "bg-stone-700 text-white" : "text-stone-300"} 
-                          group flex w-full items-center rounded-md px-3 py-2 text-sm`}
+                          className={`${
+                            active
+                              ? "bg-stone-700 text-white"
+                              : "text-stone-300"
+                          } group flex w-full items-center rounded-md px-3 py-2 text-sm`}
                         >
-                          {" "}
-                          <EnvelopeIcon className="mr-3 h-5 w-5" /> Support
-                          Email{" "}
+                          <EnvelopeIcon className="mr-3 h-5 w-5" />
+                          Support Email
                         </a>
                       )}
-                    </MenuItem>
+                    </Menu.Item>
                   </div>
-                </MenuItem>
+                </Menu.Items>
               </Transition>
             </Menu>
           </div>
@@ -593,8 +603,6 @@ function Writepage() {
             </button>
           )}
         </div>
-        {/* 상태 메시지, 커스텀 모달때문에 이제 안써도 될건데..위에 뭘 선언했는지 기억안남.. */}
-        {error && <p className="mt-3 text-red-600">{error}</p>}
         {/* 분석 결과 표시 */}
         {(analysisResultText || moodScoreDisplay !== null) && !loading && (
           <div className="mt-8 p-5 border border-stone-700 rounded-lg bg-stone-800 shadow-inner">
@@ -787,129 +795,6 @@ function Writepage() {
             </button>
           </div>
         )}
-        {/* Tailwind 커스텀 모달  */}
-        {/* 수정 확인 모달 */}
-        {modalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-lg w-full border border-stone-700">
-              {" "}
-              {/* --bg-secondary, --border-primary */}
-              <h3 className="text-xl font-semibold mb-4 text-stone-100">
-                Confirm Update
-              </h3>{" "}
-              {/* --text-primary */}
-              <p className="mb-4 text-stone-300">
-                {" "}
-                {/* --text-secondary */}
-                The following analysis and mood score will be saved based on
-                your updated text. Do you want to proceed?
-              </p>
-              <div className="mb-4 p-3 border border-stone-700 rounded bg-stone-900">
-                {" "}
-                {/* --border-primary, --bg-primary */}
-                <p className="font-semibold text-stone-200">New Mood Score:</p>
-                <p className="mb-2 text-stone-100">
-                  {tempAnalysis.score !== null
-                    ? `${tempAnalysis.score} / 100`
-                    : "N/A"}
-                </p>
-                <p className="font-semibold text-stone-200">New Analysis:</p>
-                <p className="text-sm whitespace-pre-wrap text-stone-100">
-                  {tempAnalysis.text || "Analysis not available."}
-                </p>
-              </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 rounded bg-stone-600 hover:bg-stone-700 text-stone-100"
-                >
-                  Cancel
-                </button>{" "}
-                {/* --neutral-bg, hover, --text-on-neutral-button */}
-                <button
-                  onClick={handleUpdateDiary}
-                  className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                >
-                  Confirm Update
-                </button>{" "}
-                {/* --positive-bg, hover, --text-on-accent */}
-              </div>
-            </div>
-          </div>
-        )}
-        {/* 에러 모달 */}
-        {errorModal.isOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-700">
-              <h3 className="text-lg font-semibold mb-4 text-red-500">
-                Warning
-              </h3>{" "}
-              {/* --error */}
-              <p className="mb-4 text-stone-200">{errorModal.message}</p>
-              <div className="flex justify-end">
-                <button
-                  onClick={closeErrorModal}
-                  className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Close
-                </button>{" "}
-                {/* --destructive-bg, hover, --text-on-destructive-button */}
-              </div>
-            </div>
-          </div>
-        )}
-        {/* 삭제 확인 모달 */}
-        {deleteModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-700">
-              <h3 className="text-lg font-semibold mb-4 text-stone-100">
-                Confirm Deletion
-              </h3>
-              <p className="mb-6 text-stone-300">
-                Are you sure you want to delete this diary entry? This action
-                cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleCloseDeleteModal}
-                  className="px-4 py-2 rounded bg-stone-600 hover:bg-stone-700 text-stone-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmDelete}
-                  className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* 정보/성공 모달 */}
-        {infoModal.isOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-stone-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-700">
-              <h3
-                className={`text-lg font-semibold mb-4 ${infoModal.type === "success" ? "text-emerald-500" : "text-sky-500"}`}
-              >
-                {" "}
-                {/* --success, --info */}
-                {infoModal.type === "success" ? "Success" : "Information"}
-              </h3>
-              <p className="mb-4 text-stone-200">{infoModal.message}</p>
-              <div className="flex justify-end">
-                <button
-                  onClick={closeInfoModal}
-                  className={`px-4 py-2 rounded text-white ${infoModal.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-sky-600 hover:bg-sky-700"}`}
-                >
-                  OK
-                </button>{" "}
-                {/* --positive-bg, --info-bg */}
-              </div>
-            </div>
-          </div>
-        )}
         {/* MobileDiaryList 컴포넌트 렌더링 및 props 전달 --- */}
         <MobileDiaryList
           isOpen={mobileListOpen}
@@ -933,8 +818,10 @@ function Writepage() {
             // closeMobileList(); // 필요 시 주석 해제
           }}
           loadMoreDiaries={loadMoreDiaries}
-          checkMorediaries={checkMorediaries} // 사용자 정의 상태 변수 사용
+          hasMoreDiaries={checkMorediaries} // 사용자 정의 상태 변수 사용
           isMoreLoading={moreLoading}
+          editing={editing}
+          mobileLoading={loading}
         />
         {/* --------------------------- */}
       </div>
