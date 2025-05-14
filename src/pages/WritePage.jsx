@@ -39,6 +39,10 @@ import {
   resetDeleteConfirmed,
 } from "../store/modalSlice.js";
 
+//분리된 컴포넌트 및 데이터 import
+import PersonaSelection from "../components/PersonaSelection";
+import { personas as personasDataArray } from "../data/personasData"; // ✨ 데이터 import
+
 // import { id } from "happy-dom/lib/PropertySymbol.js"; //Vite test 용 import
 
 function Writepage() {
@@ -77,6 +81,20 @@ function Writepage() {
   // ----------모바일 환경-----------
   const [mobileListOpen, setMobileListOpen] = useState(false);
 
+  // --- ✨ 페르소나 관련 상태 ---
+  const [selectedPersona, setSelectedPersona] = useState(null);
+
+  // --- ✨ 페르소나 선택 핸들러 ---
+  const handlePersonaSelect = (personaId) => {
+    if (selectedPersona === personaId) {
+      setSelectedPersona(null);
+    } else {
+      setSelectedPersona(personaId);
+    }
+    console.log("Selected Persona in WritePage:", personaId || "Default AI");
+    // TODO: 이 선택된 personaId를 analyzeAI 함수에 전달해야 함
+  };
+
   const handleCancelEdit = useCallback(() => {
     setEditing(false);
     setSelectDiary(null);
@@ -85,6 +103,7 @@ function Writepage() {
     setMoodScoreDisplay(null);
     dispatch(closeErrorModal()); // 혹시 열려있을 수 있는 에러 모달 닫기
     setOriginalDiary("");
+    setSelectedPersona(null);
   }, [dispatch]);
 
   // --- 실제 업데이트 로직 (useCallback으로 감싸고, Redux 상태 사용) ---
@@ -268,7 +287,10 @@ function Writepage() {
     dispatch(closeErrorModal());
 
     try {
-      const { analysisText, moodScore } = await analyzeAI(textToAnalyze);
+      const { analysisText, moodScore } = await analyzeAI(
+        textToAnalyze,
+        selectedPersona
+      );
       setAnalysisResultText(analysisText);
       setMoodScoreDisplay(moodScore);
 
@@ -278,6 +300,7 @@ function Writepage() {
         analysisResult: analysisText,
         createdAt: serverTimestamp(),
         moodScore: moodScore,
+        personaId: selectedPersona, // 선택된 페르소나 ID 저장
       };
 
       const collectionRef = collection(db, "users", currentUser.uid, "diaries");
@@ -313,7 +336,7 @@ function Writepage() {
       setMoodScoreDisplay(
         selectedDiary.moodScore !== undefined ? selectedDiary.moodScore : null
       );
-      setSelectDiary(diaryid);
+      setSelectedPersona(selectedDiary.personaId || null); // 저장된 페르소나 불러오기
       setEditing(true);
       dispatch(closeErrorModal()); // 에러 모달 닫기
     } else {
@@ -345,7 +368,7 @@ function Writepage() {
     dispatch(closeErrorModal());
     try {
       const { analysisText: newAnalysisText, moodScore: newMoodScore } =
-        await analyzeAI(textToUpdate);
+        await analyzeAI(textToUpdate, selectedPersona);
       dispatch(openUpdateModal({ text: newAnalysisText, score: newMoodScore }));
     } catch (error) {
       console.error("Analyzed error on modal:", error);
@@ -427,12 +450,8 @@ function Writepage() {
   return (
     // --- 전체 컨테이너: 테마 적용 ---
     <div className="relative flex min-h-screen px-2 sm:px-4 py-6 sm:py-8 gap-4 sm:gap-6 bg-stone-900 text-stone-300 w-full mx-auto">
-      {" "}
-      {/* --bg-primary, --text-secondary */}
       {/* 왼쪽: 일기 작성 영역 */}
       <div className="relative w-full lg:w-2/3 xl:w-3/4 bg-stone-800 p-4 sm:p-6 rounded-lg shadow-lg">
-        {" "}
-        {/* --bg-secondary */}
         {/* 사용자 메뉴 (스타일 유지 또는 약간 조정) */}
         {currentUser && (
           <div className="absolute top-6 right-6 z-10">
@@ -550,58 +569,74 @@ function Writepage() {
           </div>
         )}
         {/* ------------------일기 쓰는부분분------------------------- */}
-        <h1 className="text-3xl font-bold mb-5 text-stone-100">
-          Write diary
-        </h1>{" "}
-        {/* --text-primary */}
-        <p className="text-stone-400 mb-6">What did you think today?</p>{" "}
-        {/* --text-tertiary */}
-        <textarea
-          value={diaryText}
-          onChange={handleTextChange}
-          placeholder="Write down your thoughts..."
-          rows="20"
-          disabled={loading}
-          className="w-full p-4 border border-stone-700 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent 
+        <div className="flex-grow">
+          <h1 className="text-3xl font-bold mb-5 text-stone-100">
+            Write diary
+          </h1>
+          {/* --text-primary */}
+          <p className="text-stone-400 mb-6">What did you think today?</p>
+          <div className="flex gap-4 items-start mb-5">
+            {/* --- ✨ AI 페르소나 선택 UI (세로 배치) --- */}
+            <div className="flex-shrink-0">
+              {/* ✨ 아이콘 영역이 줄어들지 않도록 */}
+              <PersonaSelection
+                personas={personasDataArray}
+                selectedPersona={selectedPersona}
+                onPersonaSelect={handlePersonaSelect}
+                layoutDirection="vertical" // ✨ 레이아웃 방향을 위한 prop 추가 (선택적)
+              />
+            </div>
+            <textarea
+              value={diaryText}
+              onChange={handleTextChange}
+              placeholder="Write down your thoughts..."
+              rows="20"
+              disabled={loading}
+              className="flex-grow p-4 border border-stone-700 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent 
           bg-stone-700 text-stone-100 placeholder-stone-500 text-base" // --border-primary, --focus-ring-accent, --bg-tertiary, --text-primary, placeholder 색상 조정
-        />
-        <div className="mt-5 flex gap-3">
-          {editing ? (
-            <>
+            />
+          </div>
+        </div>
+        {/* --- ✨ 버튼 그룹 위치 변경 --- */}
+        <div className="mt-auto pt-4 flex gap-3">
+          <div className="mt-5 flex gap-3">
+            {editing ? (
+              <>
+                <button
+                  onClick={handleOpenModal}
+                  disabled={loading}
+                  className={`px-6 py-2 rounded-md text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-70 ${
+                    loading
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500" // Amber 색상 적용
+                  }`}
+                >
+                  {loading ? "Checking..." : "Update Diary"}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={loading}
+                  className="px-6 py-2 rounded-md bg-stone-600 hover:bg-stone-700 text-stone-100 focus:outline-none focus:ring-2 
+                focus:ring-stone-500 focus:ring-opacity-50" // --neutral-bg, hover, --text-on-neutral-button, --focus-ring-neutral
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
               <button
-                onClick={handleOpenModal}
+                onClick={handleAnalyze}
                 disabled={loading}
                 className={`px-6 py-2 rounded-md text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-70 ${
+                  // --text-on-accent
                   loading
                     ? "bg-gray-500 cursor-not-allowed"
-                    : "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500" // Amber 색상 적용
+                    : "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500" // --accent-primary, hover, focus-ring
                 }`}
               >
-                {loading ? "Checking..." : "Update Diary"}
+                {loading ? "Analyzing..." : "Analyze my thoughts"}
               </button>
-              <button
-                onClick={handleCancelEdit}
-                disabled={loading}
-                className="px-6 py-2 rounded-md bg-stone-600 hover:bg-stone-700 text-stone-100 focus:outline-none focus:ring-2 
-                focus:ring-stone-500 focus:ring-opacity-50" // --neutral-bg, hover, --text-on-neutral-button, --focus-ring-neutral
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={handleAnalyze}
-              disabled={loading}
-              className={`px-6 py-2 rounded-md text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-70 ${
-                // --text-on-accent
-                loading
-                  ? "bg-gray-500 cursor-not-allowed"
-                  : "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500" // --accent-primary, hover, focus-ring
-              }`}
-            >
-              {loading ? "Analyzing..." : "Analyze my thoughts"}
-            </button>
-          )}
+            )}
+          </div>
         </div>
         {/* 분석 결과 표시 */}
         {(analysisResultText || moodScoreDisplay !== null) && !loading && (
@@ -655,7 +690,7 @@ function Writepage() {
           />
         </svg>
       </button>
-      {/* 오른쪽: 사이드 패널 */}
+      {/* PC 사이드 패널 */}
       <div className="hidden md:flex md:flex-col md:w-2/5 lg:w-1/3 xl:w-1/4 bg-stone-800 p-6 rounded-lg shadow-lg">
         {" "}
         {/* --bg-secondary */}
