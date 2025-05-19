@@ -11,6 +11,9 @@ const initialState = {
   tempAnalysisData: { text: "", score: null }, // 수정 시 임시 분석 데이터
   updateConfirmed: false, //확인상태 변수들
   deleteConfirmed: false,
+  isPersonaDetailModalOpen: false, // 페르소나 상세 모달 열림 상태
+  personaDetailData: null, // 표시할 페르소나 데이터 (객체)
+  personaForConfirmation: null, // 모달에서 최종 선택된 페르소나 ID 임시 저장
 };
 
 const modalSlice = createSlice({
@@ -93,6 +96,26 @@ const modalSlice = createSlice({
       state.updateConfirmed = false;
       state.deleteConfirmed = false;
     },
+    // --- 페르소나 상세 모달 관련 리듀서 ---
+    openPersonaDetailModal: (state, action) => {
+      state.isPersonaDetailModalOpen = true;
+      state.personaDetailData = action.payload; // payload는 이제 persona 객체
+    },
+    closePersonaDetailModal: (state) => {
+      state.isPersonaDetailModalOpen = false;
+      state.personaDetailData = null; // 닫을 때 데이터 초기화
+    },
+    // ✨ 모달에서 페르소나 선택을 확정하는 새 액션
+    confirmPersonaSelectionFromModal: (state, action) => {
+      state.personaForConfirmation = action.payload; // payload: 선택된 persona.id
+      state.isPersonaDetailModalOpen = false; // 모달 닫기
+      state.personaDetailData = null;
+    },
+    // ✨ WritePage에서 personaForConfirmation을 처리한 후 초기화하는 액션
+    clearPersonaForConfirmation: (state) => {
+      state.personaForConfirmation = null;
+    },
+    // ------------------------------------
   },
 });
 
@@ -111,6 +134,12 @@ export const {
   openErrorModal,
   closeErrorModal,
   closeAllModals,
+  /*********** 페르소나 **************/
+  openPersonaDetailModal,
+  closePersonaDetailModal,
+  confirmPersonaSelectionFromModal,
+  clearPersonaForConfirmation,
+  /*********************************/
 } = modalSlice.actions;
 
 // 슬라이스의 리듀서를 export (스토어 설정에 필요)

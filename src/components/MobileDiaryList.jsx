@@ -27,6 +27,7 @@ function MobileDiaryList({
   hasMoreDiaries,
   isMoreLoading,
   mobileLoading,
+  personasData,
 }) {
   const handleClick = (diaryId) => {
     if (mobileLoading) return;
@@ -127,41 +128,60 @@ function MobileDiaryList({
                       </p>
                     ) : (
                       <ul className="space-y-4">
-                        {diaries.map((diary) => (
-                          <li
-                            key={diary.id}
-                            onClick={() => handleClick(diary.id)}
-                            className={`
+                        {diaries.map((diary) => {
+                          // ✨ 해당 일기의 페르소나 정보 찾기
+                          const personaInfo = diary.personaId
+                            ? personasData.find((p) => p.id === diary.personaId) // ✨ prop으로 받은 personasData 사용
+                            : null;
+
+                          return (
+                            <li
+                              key={diary.id}
+                              onClick={() => handleClick(diary.id)}
+                              className={`
                               ${mobileLoading ? "opacity-50 pointer-events-none cursor-not-allowed" : ""}
                               relative group pb-3 border-b border-stone-700 last:border-b-0 rounded-md p-3 transition-colors duration-150
                               ${selectedDiaryId === diary.id ? "bg-amber-600 bg-opacity-40" : ""}
                               ${!mobileLoading ? "cursor-pointer hover:bg-stone-700" : ""}
                             `}
-                          >
-                            <p className="text-sm text-stone-400 mb-1">
-                              {diary.createdAt
-                                ? new Date(diary.createdAt).toLocaleDateString(
-                                    "au-AU"
-                                  )
-                                : "N/A"}
-                            </p>
-                            {diary.moodScore !== null && (
-                              <p className="text-sm font-semibold mb-1 text-stone-200">
-                                Mood: {diary.moodScore}
+                            >
+                              {/* ✨ 날짜와 페르소나 아이콘을 함께 표시 */}
+                              <div className="flex items-center mb-1">
+                                <p className="text-sm text-stone-400 mb-1">
+                                  {diary.createdAt
+                                    ? new Date(
+                                        diary.createdAt
+                                      ).toLocaleDateString("au-AU")
+                                    : "N/A"}
+                                </p>
+                                {/* ✨ 페르소나 아이콘 표시 */}
+                                {personaInfo && personaInfo.icon && (
+                                  <img
+                                    src={personaInfo.icon}
+                                    alt={`${personaInfo.name} icon`}
+                                    className="w-4 h-4 ml-1.5 rounded-full object-cover"
+                                    title={personaInfo.name}
+                                  />
+                                )}
+                              </div>
+
+                              {diary.moodScore !== null && (
+                                <p className="text-sm font-semibold mb-1 text-stone-200">
+                                  Mood: {diary.moodScore}
+                                </p>
+                              )}
+                              <p className="text-base text-stone-300">
+                                {diary.userText?.substring(0, 50)}
+                                {diary.userText?.length > 50 ? "..." : ""}
                               </p>
-                            )}
-                            <p className="text-base text-stone-300">
-                              {diary.userText?.substring(0, 50)}
-                              {diary.userText?.length > 50 ? "..." : ""}
-                            </p>
-                            {/* 삭제 버튼 */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (mobileLoading) return;
-                                handleOpenDeleteModal(diary.id, e);
-                              }}
-                              className={`
+                              {/* 삭제 버튼 */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (mobileLoading) return;
+                                  handleOpenDeleteModal(diary.id, e);
+                                }}
+                                className={`
                                 absolute top-2 right-2 p-1 transition-opacity focus:opacity-100
                                 ${
                                   mobileLoading
@@ -169,16 +189,17 @@ function MobileDiaryList({
                                     : "text-stone-500 hover:text-red-500 opacity-0 group-hover:opacity-100"
                                 }
                               `}
-                              aria-label="Delete diary"
-                            >
-                              <XMarkIcon
-                                className="h-4 w-4"
-                                aria-hidden="true"
-                              />{" "}
-                              {/* 아이콘 변경 */}
-                            </button>
-                          </li>
-                        ))}
+                                aria-label="Delete diary"
+                              >
+                                <XMarkIcon
+                                  className="h-4 w-4"
+                                  aria-hidden="true"
+                                />{" "}
+                                {/* 아이콘 변경 */}
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     ))}
                 </div>

@@ -37,11 +37,13 @@ import {
   openErrorModal,
   resetUpdateConfirmed,
   resetDeleteConfirmed,
+  openPersonaDetailModal,
+  clearPersonaForConfirmation,
 } from "../store/modalSlice.js";
 
-//분리된 컴포넌트 및 데이터 import
+//페르소나 관련 import
 import PersonaSelection from "../components/PersonaSelection";
-import { personas as personasDataArray } from "../data/personasData"; // ✨ 데이터 import
+import { personas as personasDataArray } from "../data/personasData";
 
 // import { id } from "happy-dom/lib/PropertySymbol.js"; //Vite test 용 import
 
@@ -55,6 +57,7 @@ function Writepage() {
     deleteConfirmed,
     tempAnalysisData,
     diaryToDeleteId,
+    personaForConfirmation,
   } = useSelector((state) => state.modal);
   // -------------------------------------------------------
 
@@ -83,17 +86,6 @@ function Writepage() {
 
   // --- ✨ 페르소나 관련 상태 ---
   const [selectedPersona, setSelectedPersona] = useState(null);
-
-  // --- ✨ 페르소나 선택 핸들러 ---
-  const handlePersonaSelect = (personaId) => {
-    if (selectedPersona === personaId) {
-      setSelectedPersona(null);
-    } else {
-      setSelectedPersona(personaId);
-    }
-    console.log("Selected Persona in WritePage:", personaId || "Default AI");
-    // TODO: 이 선택된 personaId를 analyzeAI 함수에 전달해야 함
-  };
 
   const handleCancelEdit = useCallback(() => {
     setEditing(false);
@@ -246,6 +238,15 @@ function Writepage() {
   }, [deleteConfirmed, performDeleteDiary]);
   // -------------------------------------
 
+  //**********모달에서 페르소나 선택이 확정되었을 때 실제 로직 실행*******
+  useEffect(() => {
+    if (personaForConfirmation) {
+      handleActualPersonaSelect(personaForConfirmation); // 실제 선택 로직 호출
+      dispatch(clearPersonaForConfirmation()); // 임시 상태 초기화
+    }
+  }, [personaForConfirmation, dispatch]); // ✨ handleActualPersonaSelect는 useCallback으로 감싸야 함
+  //***************모달에서 페르소나 선택이 확정되었을 때 실제 로직 실행********
+
   // --- 이벤트 핸들러들 ---
   const handleTextChange = (event) => {
     setDiaryText(event.target.value);
@@ -277,6 +278,16 @@ function Writepage() {
       );
       return;
     }
+
+    if (selectedPersona === null) {
+      dispatch(
+        openErrorModal(
+          "Please choose an AI Persona to get a tailored analysis. Or click 'Default AI' in persona selection."
+        )
+      ); // ✨ 'Default AI' 버튼 안내 추가
+      return;
+    }
+
     dispatch(closeErrorModal()); // 이전 에러 모달 닫기
     setLoading(true);
     setAnalysisResultText("");
@@ -376,6 +387,32 @@ function Writepage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleActualPersonaSelect = useCallback(
+    (personaId) => {
+      // ✨ 이미 선택된 페르소나를 다시 "Select"해도 선택이 해제되지 않도록 수정
+      if (selectedPersona !== personaId) {
+        // ✨ 현재 선택과 다를 때만 새로 선택
+        setSelectedPersona(personaId);
+      }
+      // 만약 personaId가 null (Default AI 선택 등) 이라면 그것도 반영
+      if (personaId === null && selectedPersona !== null) {
+        setSelectedPersona(null);
+      }
+      // console.log(
+      //   "Persona definitively selected in WritePage:",
+      //   personaId || "Default AI"
+      // );
+    },
+    [selectedPersona]
+  ); // ✨ 의존성 배열 추가
+
+  const openPersonaDetailModalForSelection = (persona) => {
+    // ✨ 함수명 변경 및 로직 단순화
+    dispatch(
+      openPersonaDetailModal(persona) // ✨ 이제 persona 객체만 전달
+    );
   };
 
   // --- handleOpenDeleteModal (삭제 확인 모달 열기 - Redux 액션 디스패치) ---
@@ -582,7 +619,7 @@ function Writepage() {
               <PersonaSelection
                 personas={personasDataArray}
                 selectedPersona={selectedPersona}
-                onPersonaSelect={handlePersonaSelect}
+                onIconClick={openPersonaDetailModalForSelection} // ✨ 아이콘 클릭 시 모달 열고 콜백 전달
                 layoutDirection="vertical" // ✨ 레이아웃 방향을 위한 prop 추가 (선택적)
               />
             </div>
@@ -730,8 +767,7 @@ function Writepage() {
           <p className="text-red-500 text-center py-4">{listError}</p>
         )}{" "}
         {/* 일기 목록 영역 */}
-        <div className="flex-grow">
-          {" "}
+        <div className="flex-flex-grow overflow-y-auto">
           {/* 높이 채우기 */}
           {/* 로딩 및 에러 아닐 때만 렌더링 */}
           {!listLoading &&
@@ -747,42 +783,59 @@ function Writepage() {
             ) : (
               // 결과 있으면 목록 렌더링
               <ul className="space-y-4">
-                {sortedFilterDiaries.map((diary) => (
-                  // --- li 요소 수정: onMouseEnter/Leave 추가, group 제거 가능 ---
-                  <li
-                    key={diary.id}
-                    onClick={() => !loading && handleDiaryClick(diary.id)}
-                    onMouseEnter={() => setHoveredDiaryId(diary.id)} // 마우스 올리면 ID 저장
-                    onMouseLeave={() => setHoveredDiaryId(null)} // 마우스 벗어나면 null
-                    className={`relative pb-3 border-b border-stone-700 last:border-b-0 cursor-pointer
+                {sortedFilterDiaries.map((diary) => {
+                  const personaInfo = diary.personaId
+                    ? personasDataArray.find((p) => p.id === diary.personaId)
+                    : null;
+
+                  return (
+                    <li
+                      key={diary.id}
+                      onClick={() => !loading && handleDiaryClick(diary.id)}
+                      onMouseEnter={() => setHoveredDiaryId(diary.id)} // 마우스 올리면 ID 저장
+                      onMouseLeave={() => setHoveredDiaryId(null)} // 마우스 벗어나면 null
+                      className={`relative pb-3 border-b border-stone-700 last:border-b-0 cursor-pointer
                       hover:bg-stone-700 rounded-md p-3 transition-colors duration-150
                       ${selectDiary === diary.id ? "bg-amber-900 bg-opacity-30" : ""}
                       ${loading ? "opacity-50 cursor-not-allowed" : "hover:bg-stone-700"}`}
-                  >
-                    {/* 목록 아이템 내용 (변경 없음) */}
-                    <p className="text-sm text-stone-400 mb-1">
-                      {diary.createdAt
-                        ? new Date(diary.createdAt).toLocaleDateString("au-AU")
-                        : "N/A"}
-                    </p>
-                    {diary.moodScore !== null && (
-                      <p className="text-sm font-semibold mb-1 text-stone-200">
-                        Mood: {diary.moodScore}
+                    >
+                      {/* ✨ 날짜와 페르소나 아이콘을 함께 표시 */}
+                      <div className="flex items-center mb-1">
+                        <p className="text-sm text-stone-400 mb-1">
+                          {diary.createdAt
+                            ? new Date(diary.createdAt).toLocaleDateString(
+                                "au-AU"
+                              )
+                            : "N/A"}
+                        </p>
+                        {/* ✨ 페르소나 아이콘 표시 */}
+                        {personaInfo && personaInfo.icon && (
+                          <img
+                            src={personaInfo.icon}
+                            alt={`${personaInfo.name} icon`}
+                            className="w-4 h-4 ml-1.5 rounded-full object-cover" // ✨ 크기 및 마진 조절
+                            title={personaInfo.name} // ✨ 호버 시 페르소나 이름 표시 (툴팁)
+                          />
+                        )}
+                      </div>
+                      {diary.moodScore !== null && (
+                        <p className="text-sm font-semibold mb-1 text-stone-200">
+                          Mood: {diary.moodScore}
+                        </p>
+                      )}
+                      <p className="text-base text-stone-300">
+                        {diary.userText?.substring(0, 50)}
+                        {diary.userText?.length > 50 ? "..." : ""}
                       </p>
-                    )}
-                    <p className="text-base text-stone-300">
-                      {diary.userText?.substring(0, 50)}
-                      {diary.userText?.length > 50 ? "..." : ""}
-                    </p>
 
-                    {/* --- 삭제 버튼 수정: 표시 조건 변경 --- */}
-                    <button
-                      onClick={(e) =>
-                        !loading && handleOpenDeleteModal(diary.id, e)
-                      } // 로딩 중 클릭 방지
-                      disabled={loading} // 버튼 자체 비활성화
-                      // group-hover 대신 hoveredDiaryId 상태로 opacity 제어
-                      className={`absolute top-2 right-2 p-1 text-stone-500 hover:text-red-500 transition-opacity 
+                      {/* --- 삭제 버튼 수정: 표시 조건 변경 --- */}
+                      <button
+                        onClick={(e) =>
+                          !loading && handleOpenDeleteModal(diary.id, e)
+                        } // 로딩 중 클릭 방지
+                        disabled={loading} // 버튼 자체 비활성화
+                        // group-hover 대신 hoveredDiaryId 상태로 opacity 제어
+                        className={`absolute top-2 right-2 p-1 text-stone-500 hover:text-red-500 transition-opacity 
                         duration-150 focus:opacity-100 
                         ${
                           // 로딩 중이거나, 호버되지 않았으면 숨김 (클릭도 방지)
@@ -790,27 +843,28 @@ function Writepage() {
                             ? "opacity-0 pointer-events-none"
                             : "opacity-100" // 로딩 중 아니고 호버되었으면 보임
                         }`}
-                      aria-label="Delete diary"
-                    >
-                      {/* SVG 아이콘 (변경 없음) */}
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
+                        aria-label="Delete diary"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                    {/* ------------------------------------ */}
-                  </li>
-                ))}
+                        {/* SVG 아이콘 (변경 없음) */}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                      {/* ------------------------------------ */}
+                    </li>
+                  );
+                })}
               </ul>
             ))}
         </div>
@@ -857,6 +911,7 @@ function Writepage() {
           isMoreLoading={moreLoading}
           editing={editing}
           mobileLoading={loading}
+          personasData={personasDataArray} // ✨ 페르소나 데이터 전달
         />
         {/* --------------------------- */}
       </div>
