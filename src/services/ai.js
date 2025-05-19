@@ -1,40 +1,46 @@
 import axios from "axios";
+import {
+  personas as allPersonas,
+  defaultSystemPrompt,
+} from "../data/personasData";
 
 const API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
 const api_endpoint = "https://openrouter.ai/api/v1/chat/completions";
-export async function analyzeAI(UserText) {
+
+export async function analyzeAI(UserText, personaId = null) {
   const headers = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${API_KEY}`, // API 키를 Bearer 토큰 방식으로 전달
   };
 
-  const prompt = `
-    Mood Score 를 꼭 표기하세요. 그렇지 않으면 오류를 출력합니다. 그리고 다음 내용을 숙지하세요:
+  let systemMessageContent = defaultSystemPrompt; // 기본 프롬프트
 
-    당신은 매우 유능하고 지시사항을 잘 따르는 AI 심리 분석 전문가입니다. 
-    당신의 주요 임무는 사용자가 제공하는 일기 텍스트를 분석하고, 그 결과를 정확히 아래에 명시된 두 가지 작업에 따라 지정된 형식으로 응답하는 것입니다. 
-    반드시 친절하고 공감하는 어조를 유지해주세요. 수행해야 할 작업은 다음과 같습니다: 인지 왜곡 분석 및 피드백(텍스트 내용에서 인지 왜곡(Cognitive Distortion) 패턴(예: 흑백논리, 과잉 일반화, 재앙화 사고, 독심술 등)이 나타나는지 주의 깊게 식별합니다.)
-    만약 하나 이상의 인지 왜곡이 식별되면, 어떤 왜곡인지 명확히 언급하고, 해당 왜곡이 왜 문제적인 사고 패턴인지 간략히 설명합니다. 그리고 그 왜곡된 생각에 대한 구체적이고 실용적인 대안적 사고방식을 1~2가지 제안합니다.
-    만약 텍스트에서 뚜렷한 인지 왜곡 패턴이 발견되지 않는다면, 사용자가 자신의 감정이나 경험을 솔직하게 표현한 점 등 긍정적인 측면을 찾아 구체적으로 칭찬하고 격려하는 메시지를 작성합니다.
-    그리고 분석한 텍스트 내용 전체를 바탕으로 사용자의 전반적인 감정 상태를 0점에서 100점 사이의 숫자 점수로 평가합니다. 그리고 점수 기준은은 0점은 매우 부정적인 상태, 50점은 중립적인 상태, 100점은 매우 긍정적인 상태를 의미합니다.
-    제일 중요한것은 평가된 점수를 숫자만 제시해야 합니다.
-    `;
+  if (personaId) {
+    const selectedPersonaData = allPersonas.find((p) => p.id === personaId);
+    if (selectedPersonaData && selectedPersonaData.systemPrompt) {
+      systemMessageContent = selectedPersonaData.systemPrompt;
+    } else {
+      console.warn(
+        `Persona with id "${personaId}" not found or has no systemPrompt. Using default prompt.`
+      );
+    }
+  }
 
   const data = {
     model: "deepseek/deepseek-chat-v3-0324:free",
     messages: [
       {
         role: "system",
-        content: prompt,
+        content: systemMessageContent,
       },
       {
         role: "user",
-        content: `"${UserText}"`,
+        content: UserText,
       },
     ],
     stream: false, // 스트리밍 응답을 원하지 않음
     max_tokens: 2000,
-    temperature: 0.5, // 낮은 온도로 더 일관된 응답 유도
+    temperature: 0.7, // 페르소나의 개성을 살리기 위해 온도를 살짝 높여볼 수 있습니다 (0.5 ~ 0.8 사이)
   };
 
   try {
@@ -54,17 +60,9 @@ export async function analyzeAI(UserText) {
         // 정규식 매칭 성공 및 숫자 그룹 존재 시
         const scoreIndex = fullResponseText.indexOf(scoreMatch[0]);
         analysisText = fullResponseText.substring(0, scoreIndex).trim();
-        if (analysisText.startsWith("분석결과:")) {
-          analysisText = analysisText.substring("분석결과:".length).trim();
-        }
-
         moodScore = parseInt(scoreMatch[1], 10);
         if (isNaN(moodScore) || moodScore < 0 || moodScore > 100) {
-          console.warn(
-            "파싱된 Mood Score가 유효 범위를 벗어났습니다:",
-            moodScore
-          );
-          moodScore = null; // 유효하지 않으면 null
+          moodScore = null;
         }
       } else {
         // 정규식 실패 시, 마지막 줄에서 숫자만 있는지 확인 (차선책)
