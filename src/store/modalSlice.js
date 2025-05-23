@@ -8,7 +8,7 @@ const initialState = {
   modalMessage: "",
   modalType: "info", // 'info', 'success', 'error' 등
   diaryToDeleteId: null, // 삭제할 일기 ID
-  tempAnalysisData: { text: "", score: null }, // 수정 시 임시 분석 데이터
+  tempAnalysisData: { text: "", score: null, keywords: [] }, // 수정 시 임시 분석 데이터
   updateConfirmed: false, //확인상태 변수들
   deleteConfirmed: false,
   isPersonaDetailModalOpen: false, // 페르소나 상세 모달 열림 상태
@@ -38,7 +38,7 @@ const modalSlice = createSlice({
     resetUpdateConfirmed: (state) => {
       // 작업 완료 후 리셋
       state.updateConfirmed = false;
-      state.tempAnalysisData = { text: "", score: null }; // 임시 데이터도 여기서 초기화
+      state.tempAnalysisData = { text: "", score: null, keywords: [] }; // tempAnalysisData 초기화 시 keywords도 초기화
     },
     //-------------------------
     // 삭제 확인 모달 열기 (삭제할 ID 포함)

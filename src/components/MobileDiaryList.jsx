@@ -133,6 +133,10 @@ function MobileDiaryList({
                           const personaInfo = diary.personaId
                             ? personasData.find((p) => p.id === diary.personaId) // ✨ prop으로 받은 personasData 사용
                             : null;
+                          const isEdited =
+                            diary.updatedAt &&
+                            diary.createdAt &&
+                            diary.updatedAt > diary.createdAt + 1000; // 수정 여부 확인
 
                           return (
                             <li
@@ -153,6 +157,12 @@ function MobileDiaryList({
                                         diary.createdAt
                                       ).toLocaleDateString("au-AU")
                                     : "N/A"}
+                                  {/* 수정됨 표시 */}
+                                  {isEdited && (
+                                    <span className="ml-1 text-xs text-stone-500">
+                                      (edited)
+                                    </span>
+                                  )}
                                 </p>
                                 {/* ✨ 페르소나 아이콘 표시 */}
                                 {personaInfo && personaInfo.icon && (
