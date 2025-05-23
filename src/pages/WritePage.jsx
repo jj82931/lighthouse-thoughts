@@ -80,6 +80,7 @@ function Writepage() {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState(null); // 목록 로딩 에러
   const [moreLoading, setMoreLoading] = useState(false);
+  const [analysisKeywords, setAnalysisKeywords] = useState([]); //ai.js 에서 나온 키워드 저장상태
 
   // ----------모바일 환경-----------
   const [mobileListOpen, setMobileListOpen] = useState(false);
@@ -97,6 +98,27 @@ function Writepage() {
     setOriginalDiary("");
     setSelectedPersona(null);
   }, [dispatch]);
+
+  /******************먼저 선언해야 하는 함수 또는 useEffect***************** */
+  const handleActualPersonaSelect = useCallback(
+    (personaId) => {
+      // ✨ 이미 선택된 페르소나를 다시 "Select"해도 선택이 해제되지 않도록 수정
+      if (selectedPersona !== personaId) {
+        // ✨ 현재 선택과 다를 때만 새로 선택
+        setSelectedPersona(personaId);
+      }
+      // 만약 personaId가 null (Default AI 선택 등) 이라면 그것도 반영
+      if (personaId === null && selectedPersona !== null) {
+        setSelectedPersona(null);
+      }
+      // console.log(
+      //   "Persona definitively selected in WritePage:",
+      //   personaId || "Default AI"
+      // );
+    },
+    [selectedPersona]
+  );
+  /******************************************************************** */
 
   // --- 실제 업데이트 로직 (useCallback으로 감싸고, Redux 상태 사용) ---
   const performUpdateDiary = useCallback(async () => {
@@ -117,6 +139,9 @@ function Writepage() {
       userText: diaryText,
       analysisResult: tempAnalysisData.text,
       moodScore: tempAnalysisData.score,
+      keywords: tempAnalysisData.keywords || [], // tempAnalysisData에서 keywords 가져와 저장
+      personaId: selectedPersona, // 수정 시 페르소나도 함께 업데이트
+      updatedAt: serverTimestamp(), // 업데이트 시간 추가가
     };
     try {
       await updateDiaryEntry(currentUser.uid, selectDiary, dataToUpdate);
@@ -124,7 +149,15 @@ function Writepage() {
       setDiaries((prev) =>
         prev.map((d) =>
           d.id === selectDiary
-            ? { ...d, ...dataToUpdate, updatedAt: new Date() }
+            ? {
+                ...d,
+                userText: diaryText, // ✨ 수정된 텍스트 반영
+                analysisResult: tempAnalysisData.text,
+                moodScore: tempAnalysisData.score,
+                keywords: tempAnalysisData.keywords || [],
+                personaId: selectedPersona,
+                updatedAt: new Date(), // Firestore serverTimestamp와는 다르지만, 즉각적인 UI 반영을위해
+              }
             : d
         )
       );
@@ -150,6 +183,7 @@ function Writepage() {
     diaryText,
     dispatch,
     handleCancelEdit,
+    selectedPersona,
   ]);
 
   // --- 실제 삭제 로직 (useCallback으로 감싸고, Redux 상태 사용) ---
@@ -191,7 +225,7 @@ function Writepage() {
   }, [currentUser, diaryToDeleteId, selectDiary, dispatch, handleCancelEdit]);
   // -------------------------------------------------------------------
 
-  //------------------UseEffect 부분-------------------------
+  //********************UseEffect 부분*********************************
   useEffect(() => {
     if (currentUser) {
       setListLoading(true);
@@ -236,16 +270,24 @@ function Writepage() {
       performDeleteDiary();
     }
   }, [deleteConfirmed, performDeleteDiary]);
-  // -------------------------------------
 
-  //**********모달에서 페르소나 선택이 확정되었을 때 실제 로직 실행*******
+  useEffect(() => {
+    if (analysisKeywords.length > 0) {
+      console.log(
+        "Analysis Keywords for potential recommendations:",
+        analysisKeywords
+      );
+      // TODO: Implement content recommendation logic using these keywords
+    }
+  }, [analysisKeywords]);
+
   useEffect(() => {
     if (personaForConfirmation) {
       handleActualPersonaSelect(personaForConfirmation); // 실제 선택 로직 호출
       dispatch(clearPersonaForConfirmation()); // 임시 상태 초기화
     }
-  }, [personaForConfirmation, dispatch]); // ✨ handleActualPersonaSelect는 useCallback으로 감싸야 함
-  //***************모달에서 페르소나 선택이 확정되었을 때 실제 로직 실행********
+  }, [personaForConfirmation, dispatch, handleActualPersonaSelect]);
+  //*********************************************************
 
   // --- 이벤트 핸들러들 ---
   const handleTextChange = (event) => {
@@ -282,7 +324,7 @@ function Writepage() {
     if (selectedPersona === null) {
       dispatch(
         openErrorModal(
-          "Please choose an AI Persona to get a tailored analysis. Or click 'Default AI' in persona selection."
+          "Please choose an AI Persona to get a tailored analysis."
         )
       ); // ✨ 'Default AI' 버튼 안내 추가
       return;
@@ -292,18 +334,20 @@ function Writepage() {
     setLoading(true);
     setAnalysisResultText("");
     setMoodScoreDisplay(null);
+    setAnalysisKeywords([]); // 키워드 초기화
     setSelectDiary(null);
     setEditing(false);
     setOriginalDiary("");
     dispatch(closeErrorModal());
 
     try {
-      const { analysisText, moodScore } = await analyzeAI(
+      const { analysisText, moodScore, keywords } = await analyzeAI(
         textToAnalyze,
         selectedPersona
       );
       setAnalysisResultText(analysisText);
       setMoodScoreDisplay(moodScore);
+      setAnalysisKeywords(keywords || []); // 키워드 상태 업데이트 (없으면 빈 배열)
 
       const diaryData = {
         userId: currentUser.uid,
@@ -312,6 +356,7 @@ function Writepage() {
         createdAt: serverTimestamp(),
         moodScore: moodScore,
         personaId: selectedPersona, // 선택된 페르소나 ID 저장
+        keywords: keywords || [], // Firestore에도 키워드 저장
       };
 
       const collectionRef = collection(db, "users", currentUser.uid, "diaries");
@@ -347,6 +392,7 @@ function Writepage() {
       setMoodScoreDisplay(
         selectedDiary.moodScore !== undefined ? selectedDiary.moodScore : null
       );
+      setSelectDiary(diaryid);
       setSelectedPersona(selectedDiary.personaId || null); // 저장된 페르소나 불러오기
       setEditing(true);
       dispatch(closeErrorModal()); // 에러 모달 닫기
@@ -373,14 +419,27 @@ function Writepage() {
       dispatch(openErrorModal("Content has not been changed."));
       return;
     }
+    if (selectedPersona === null) {
+      dispatch(openErrorModal("Please choose an AI Persona for re-analysis."));
+      return;
+    }
 
     setLoading(true);
     dispatch(closeInfoModal());
     dispatch(closeErrorModal());
     try {
-      const { analysisText: newAnalysisText, moodScore: newMoodScore } =
-        await analyzeAI(textToUpdate, selectedPersona);
-      dispatch(openUpdateModal({ text: newAnalysisText, score: newMoodScore }));
+      const {
+        analysisText: newAnalysisText,
+        moodScore: newMoodScore,
+        keywords: newKeywords,
+      } = await analyzeAI(diaryText, selectedPersona);
+      dispatch(
+        openUpdateModal({
+          text: newAnalysisText,
+          score: newMoodScore,
+          keywords: newKeywords || [],
+        })
+      );
     } catch (error) {
       console.error("Analyzed error on modal:", error);
       dispatch(openErrorModal(error.message || "Re-analyzing error"));
@@ -388,25 +447,6 @@ function Writepage() {
       setLoading(false);
     }
   };
-
-  const handleActualPersonaSelect = useCallback(
-    (personaId) => {
-      // ✨ 이미 선택된 페르소나를 다시 "Select"해도 선택이 해제되지 않도록 수정
-      if (selectedPersona !== personaId) {
-        // ✨ 현재 선택과 다를 때만 새로 선택
-        setSelectedPersona(personaId);
-      }
-      // 만약 personaId가 null (Default AI 선택 등) 이라면 그것도 반영
-      if (personaId === null && selectedPersona !== null) {
-        setSelectedPersona(null);
-      }
-      // console.log(
-      //   "Persona definitively selected in WritePage:",
-      //   personaId || "Default AI"
-      // );
-    },
-    [selectedPersona]
-  ); // ✨ 의존성 배열 추가
 
   const openPersonaDetailModalForSelection = (persona) => {
     // ✨ 함수명 변경 및 로직 단순화
@@ -787,6 +827,10 @@ function Writepage() {
                   const personaInfo = diary.personaId
                     ? personasDataArray.find((p) => p.id === diary.personaId)
                     : null;
+                  const isEdited =
+                    diary.updatedAt &&
+                    diary.createdAt &&
+                    diary.updatedAt > diary.createdAt + 1000; // 1초 이상 차이날 때 수정으로 간주
 
                   return (
                     <li
@@ -807,6 +851,12 @@ function Writepage() {
                                 "au-AU"
                               )
                             : "N/A"}
+                          {/* 수정됨 표시 */}
+                          {isEdited && (
+                            <span className="ml-1 text-xs text-stone-500">
+                              (edited)
+                            </span>
+                          )}
                         </p>
                         {/* ✨ 페르소나 아이콘 표시 */}
                         {personaInfo && personaInfo.icon && (

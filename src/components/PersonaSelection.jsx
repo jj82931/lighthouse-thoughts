@@ -5,7 +5,6 @@ import { openPersonaDetailModal } from "../store/modalSlice"; // 액션 import
 function PersonaSelection({
   personas,
   selectedPersona,
-  onPersonaSelect,
   onIconClick,
   layoutDirection = "horizontal",
 }) {
@@ -41,11 +40,9 @@ function PersonaSelection({
     layoutDirection === "vertical"
       ? "flex flex-col space-y-3 items-center" // 세로 배치
       : "flex space-x-3 items-center relative"; // 가로 배치 (기존)
-
   return (
     <div className="mb-4">
       <div className={containerClasses}>
-        {" "}
         {/* ✨ items-center 추가 */}
         {personas.map((persona) => (
           <div key={persona.id} className="relative">
@@ -84,16 +81,6 @@ function PersonaSelection({
             )}
           </div>
         ))}
-        {/* 기본 AI로 돌아가는 버튼 (선택적) */}
-        {selectedPersona && layoutDirection === "horizontal" && (
-          <button
-            onClick={() => onPersonaSelect(null)} // ✨ 부모의 onPersonaSelect 호출 (null 전달)
-            className="ml-2 p-2 text-xs text-stone-400 hover:text-stone-200 underline" // ✨ ml-2 추가로 간격 조정
-            title="Use Default AI Analyzer"
-          >
-            Default AI
-          </button>
-        )}
       </div>
     </div>
   );
