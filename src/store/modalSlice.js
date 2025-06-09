@@ -14,6 +14,12 @@ const initialState = {
   isPersonaDetailModalOpen: false, // 페르소나 상세 모달 열림 상태
   personaDetailData: null, // 표시할 페르소나 데이터 (객체)
   personaForConfirmation: null, // 모달에서 최종 선택된 페르소나 ID 임시 저장
+  isRecommendationModalOpen: false,
+  recommendationData: {
+    videos: [],
+    category: "",
+    personaName: "",
+  },
 };
 
 const modalSlice = createSlice({
@@ -116,6 +122,16 @@ const modalSlice = createSlice({
       state.personaForConfirmation = null;
     },
     // ------------------------------------
+    // --- ✨ 추천 영상 모달 관련 리듀서 ---
+    openRecommendationModal: (state, action) => {
+      state.isRecommendationModalOpen = true;
+      state.recommendationData = action.payload; // payload: { videos: [], category: "", personaName: "" }
+    },
+    closeRecommendationModal: (state) => {
+      state.isRecommendationModalOpen = false;
+      state.recommendationData = { videos: [], category: "", personaName: "" }; // 초기화
+    },
+    // ------------------------------------
   },
 });
 
@@ -124,11 +140,11 @@ export const {
   openUpdateModal,
   closeUpdateModal,
   confirmUpdate,
-  resetUpdateConfirmed, // 추가
+  resetUpdateConfirmed,
   openDeleteModal,
   closeDeleteModal,
   confirmDelete,
-  resetDeleteConfirmed, // 추가
+  resetDeleteConfirmed,
   openInfoModal,
   closeInfoModal,
   openErrorModal,
@@ -139,7 +155,9 @@ export const {
   closePersonaDetailModal,
   confirmPersonaSelectionFromModal,
   clearPersonaForConfirmation,
-  /*********************************/
+  /**************유튜브***************/
+  openRecommendationModal,
+  closeRecommendationModal,
 } = modalSlice.actions;
 
 // 슬라이스의 리듀서를 export (스토어 설정에 필요)

@@ -16,6 +16,7 @@ import {
 } from "../services/firestoredb.js";
 import MobileDiaryList from "../components/MobileDiaryList.jsx";
 import { Menu, Transition, MenuItem, MenuButton } from "@headlessui/react"; //
+import { PlayCircleIcon as RecommendationIcon } from "@heroicons/react/24/solid";
 import {
   CodeBracketIcon,
   StarIcon,
@@ -39,7 +40,11 @@ import {
   resetDeleteConfirmed,
   openPersonaDetailModal,
   clearPersonaForConfirmation,
+  openRecommendationModal,
 } from "../store/modalSlice.js";
+
+// 유튜브 검색 import
+import { searchYoutubeVideos } from "../services/youtubeApi"; // ✨ 유튜브 검색 함수 import
 
 //페르소나 관련 import
 import PersonaSelection from "../components/PersonaSelection";
@@ -85,9 +90,15 @@ function Writepage() {
   // ----------모바일 환경-----------
   const [mobileListOpen, setMobileListOpen] = useState(false);
 
-  // --- ✨ 페르소나 관련 상태 ---
+  // ---  페르소나 관련 상태 ---
   const [selectedPersona, setSelectedPersona] = useState(null);
+  //--- Youtube 관련--------------
+  const [youtubeRecommendations, setYoutubeRecommendations] = useState([]);
+  const [youtubeSearchLoading, setYoutubeSearchLoading] = useState(false);
+  const [recommendedCategoryForModal, setRecommendedCategoryForModal] =
+    useState(""); // 모달에 전달할 카테고리명
 
+  /******************먼저 선언해야 하는 함수 또는 useEffect***************** */
   const handleCancelEdit = useCallback(() => {
     setEditing(false);
     setSelectDiary(null);
@@ -99,7 +110,6 @@ function Writepage() {
     setSelectedPersona(null);
   }, [dispatch]);
 
-  /******************먼저 선언해야 하는 함수 또는 useEffect***************** */
   const handleActualPersonaSelect = useCallback(
     (personaId) => {
       // ✨ 이미 선택된 페르소나를 다시 "Select"해도 선택이 해제되지 않도록 수정
@@ -339,15 +349,66 @@ function Writepage() {
     setEditing(false);
     setOriginalDiary("");
     dispatch(closeErrorModal());
+    setYoutubeRecommendations([]);
+    setRecommendedCategoryForModal("");
 
     try {
-      const { analysisText, moodScore, keywords } = await analyzeAI(
-        textToAnalyze,
-        selectedPersona
-      );
+      const {
+        analysisText,
+        moodScore,
+        keywords,
+        recommendedCategory,
+        youtubeSearchKeywords, // AI가 제공한 유튜브 검색용 키워드
+      } = await analyzeAI(textToAnalyze, selectedPersona);
+
       setAnalysisResultText(analysisText);
       setMoodScoreDisplay(moodScore);
       setAnalysisKeywords(keywords || []); // 키워드 상태 업데이트 (없으면 빈 배열)
+      setRecommendedCategoryForModal(recommendedCategory || "Recommendations"); // 모달용 카테고리명 저장
+
+      // --- 유튜브 영상 추천 로직 ---
+      if (youtubeSearchKeywords && youtubeSearchKeywords.length > 0) {
+        setYoutubeSearchLoading(true);
+        try {
+          const query = Array.isArray(youtubeSearchKeywords)
+            ? youtubeSearchKeywords.join(" ")
+            : youtubeSearchKeywords;
+
+          const videos = await searchYoutubeVideos(query, 3); // 최대 3개 검색
+          setYoutubeRecommendations(videos); // 검색 결과만 저장 (모달은 바로 열지 않음)
+
+          if (videos && videos.length > 0) {
+            console.log("No YouTube videos found for the keywords.");
+            // ✨ 추천 모달을 열기 위한 데이터 준비
+            // const currentPersonaInfo = personasDataArray.find(
+            //   (p) => p.id === selectedPersona
+            // );
+            // dispatch(
+            //   openRecommendationModal({
+            //     // modalSlice.js에 이 액션과 상태가 정의되어 있어야 함
+            //     videos: videos,
+            //     category: recommendedCategory || "For You", // AI가 준 카테고리명 사용
+            //     personaName: currentPersonaInfo
+            //       ? currentPersonaInfo.name
+            //       : "AI",
+            //   })
+            // );
+          }
+        } catch (youtubeError) {
+          console.error(
+            "Failed to fetch YouTube recommendations:",
+            youtubeError
+          );
+          // (선택적) 사용자에게 에러 알림
+          // dispatch(openErrorModal("Sorry, an error occurred while fetching video recommendations."));
+        } finally {
+          setYoutubeSearchLoading(false);
+        }
+      } else {
+        console.log("No YouTube search keywords provided by AI.");
+        // (선택적) 키워드가 없어 추천을 못했다는 알림
+      }
+      // -----------------------------
 
       const diaryData = {
         userId: currentUser.uid,
@@ -379,6 +440,30 @@ function Writepage() {
       dispatch(openErrorModal(err.message || "Analyzing error"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✨ "추천 보기" 버튼 클릭 시 모달을 여는 함수
+  const handleOpenRecommendationModal = () => {
+    if (youtubeRecommendations && youtubeRecommendations.length > 0) {
+      const currentPersonaInfo = personasDataArray.find(
+        (p) => p.id === selectedPersona
+      );
+      dispatch(
+        openRecommendationModal({
+          videos: youtubeRecommendations,
+          category: recommendedCategoryForModal, // 저장해둔 카테고리명 사용
+          personaName: currentPersonaInfo ? currentPersonaInfo.name : "AI",
+        })
+      );
+    } else {
+      // 추천 영상이 없을 경우 사용자에게 알림 (선택적)
+      dispatch(
+        openInfoModal({
+          message: "No video recommendations available for this entry yet.",
+          type: "info",
+        })
+      );
     }
   };
 
@@ -718,13 +803,34 @@ function Writepage() {
         {/* 분석 결과 표시 */}
         {(analysisResultText || moodScoreDisplay !== null) && !loading && (
           <div className="mt-8 p-5 border border-stone-700 rounded-lg bg-stone-800 shadow-inner">
-            {" "}
-            {/* --border-primary, --bg-secondary */}
-            <h2 className="text-2xl font-semibold mb-4 text-stone-100">
+            <div className="flex justify-between items-start">
               {" "}
-              {/* --text-primary */}
-              Result analyzing
-            </h2>
+              {/* ✨ 제목과 버튼을 같은 줄에 배치 */}
+              <h2 className="text-2xl font-semibold mb-4 text-stone-100">
+                Result analyzing
+              </h2>
+              {/* ✨ 추천 보기 버튼 (youtubeRecommendations에 데이터가 있거나, 로딩 중이 아닐 때 표시) */}
+              {!youtubeSearchLoading && youtubeRecommendations.length > 0 && (
+                <div className="mt-4 text-center">
+                  {" "}
+                  {/* 또는 text-left, text-right */}
+                  <button
+                    onClick={handleOpenRecommendationModal}
+                    className="inline-flex items-center px-4 py-2 border border-amber-500 text-sm font-medium rounded-md shadow-sm text-amber-500 hover:bg-amber-500 hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-stone-800 focus:ring-amber-500 transition-colors duration-150"
+                  >
+                    <RecommendationIcon className="h-5 w-5 mr-2 -ml-1" />
+                    View Recommendations video
+                  </button>
+                </div>
+              )}
+              {youtubeSearchLoading && (
+                <div className="p-2 -mt-1 -mr-1">
+                  <div className="w-5 h-5 border-2 border-stone-500 border-t-amber-500 rounded-full animate-spin"></div>{" "}
+                  {/* 간단한 스피너 */}
+                </div>
+              )}
+            </div>
+
             {moodScoreDisplay !== null && (
               <p className="font-bold text-lg mb-3 text-stone-200">
                 {" "}
@@ -934,7 +1040,7 @@ function Writepage() {
             </button>
           </div>
         )}
-        {/* MobileDiaryList 컴포넌트 렌더링 및 props 전달 --- */}
+        {/* MobileDiaryList*/}
         <MobileDiaryList
           isOpen={mobileListOpen}
           onClose={closeMobileList}

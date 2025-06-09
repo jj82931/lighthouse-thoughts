@@ -45,54 +45,100 @@ export async function analyzeAI(UserText, personaId) {
 
   try {
     const response = await axios.post(api_endpoint, data, { headers: headers });
-    const fullResponseText = response.data?.choices?.[0]?.message?.content;
+    let fullResponseText = response.data?.choices?.[0]?.message?.content;
 
     if (fullResponseText) {
-      // --- 파싱 로직 수정 ---
-      let analysisText = fullResponseText.trim();
+      fullResponseText = fullResponseText.trim();
+      console.log(
+        "Original AI Response (for parsing debug):\n",
+        fullResponseText
+      );
+
       let moodScore = null;
-      let keywords = []; // ✨ 추출된 키워드를 저장할 배열
+      let diaryKeywords = [];
+      let recommendedCategory = "";
+      let youtubeSearchKeywords = [];
+      let analysisText = fullResponseText; // 작업 대상 텍스트
 
-      // 정규식으로 "Mood Score"와 숫자 찾기 (더 유연하게)
-      const scoreRegex = /Mood Score\s*[:-]*\s*(\d+)/i;
-      const scoreMatch = fullResponseText.match(scoreRegex);
-      let textBeforeMoodScore = analysisText; // Mood Score 앞부분 텍스트를 임시 저장
-
-      if (scoreMatch && scoreMatch[1]) {
-        const scoreIndex = fullResponseText.lastIndexOf(scoreMatch[0]); // ✨ 마지막 Mood Score를 찾도록 lastIndexOf 사용
-        textBeforeMoodScore = fullResponseText.substring(0, scoreIndex).trim(); // Mood Score 앞부분만 잘라냄
-        moodScore = parseInt(scoreMatch[1], 10);
-        if (isNaN(moodScore) || moodScore < 0 || moodScore > 100) {
+      // 1. Mood Score 추출 (가장 마지막에 위치)
+      const moodScoreRegex = /\*\*Mood Score:\*\*\s*(\d+)\s*$/im;
+      const moodScoreMatch = analysisText.match(moodScoreRegex);
+      if (moodScoreMatch && moodScoreMatch[1]) {
+        moodScore = parseInt(moodScoreMatch[1], 10);
+        if (isNaN(moodScore) || moodScore < 0 || moodScore > 100)
           moodScore = null;
-        }
+        analysisText = analysisText.replace(moodScoreRegex, "").trim();
       } else {
-        console.warn("AI 응답에서 Mood Score 패턴을 찾을 수 없습니다.");
-        // Mood Score가 없으면 textBeforeMoodScore는 전체 텍스트가 됨
+        console.warn("Mood Score pattern not found at the end.");
       }
+      // console.log("After Mood Score, remaining:\n", analysisText);
 
-      // Keywords 파싱 (Mood Score 파싱 후 남은 텍스트에서 Keywords 찾기)
-      const keywordsRegex = /Keywords\s*[:-]*\s*(.+)/i;
-      const keywordsMatch = textBeforeMoodScore.match(keywordsRegex);
-      let textBeforeKeywords = textBeforeMoodScore; // Keywords 앞부분 텍스트 (실제 분석 내용)
-
-      if (keywordsMatch && keywordsMatch[1]) {
-        const keywordsIndex = textBeforeMoodScore.lastIndexOf(keywordsMatch[0]); // ✨ 마지막 Keywords를 찾도록
-        textBeforeKeywords = textBeforeMoodScore
-          .substring(0, keywordsIndex)
-          .trim(); // Keywords 앞부분만 잘라냄
-        keywords = keywordsMatch[1]
+      // 2. (일기) Keywords 추출 (Mood Score 바로 앞에 위치)
+      const diaryKeywordsRegex =
+        /\*\*Keywords:\*\*\s*([^\n]+?)\s*(?=(\*\*Mood Score:\*\*|$))/im; // Mood Score 전까지
+      const diaryKeywordsMatch = analysisText.match(diaryKeywordsRegex);
+      if (diaryKeywordsMatch && diaryKeywordsMatch[1]) {
+        diaryKeywords = diaryKeywordsMatch[1]
           .split(",")
           .map((kw) => kw.trim())
-          .filter((kw) => kw); // 쉼표로 구분하고, 앞뒤 공백 제거, 빈 값 필터링
+          .filter((kw) => kw);
+        analysisText = analysisText.replace(diaryKeywordsRegex, "").trim();
       } else {
-        console.warn("AI 응답에서 Keywords 패턴을 찾을 수 없습니다.");
-        // Keywords가 없으면 textBeforeKeywords는 textBeforeMoodScore 전체가 됨
+        console.warn("(Diary) Keywords pattern not found.");
       }
+      // console.log("After Diary Keywords, remaining:\n", analysisText);
 
-      analysisText = textBeforeKeywords; // 최종 분석 텍스트
+      // 3. YouTube Search Keywords 추출 (일기 Keywords 바로 앞에 위치)
+      const ytSearchKeywordsRegex =
+        /\*\*YouTube Search Keywords:\*\*\s*([^\n]+?)\s*(?=(\*\*Keywords:\*\*|$))/im; // Keywords 전까지
+      const ytSearchKeywordsMatch = analysisText.match(ytSearchKeywordsRegex);
+      if (ytSearchKeywordsMatch && ytSearchKeywordsMatch[1]) {
+        youtubeSearchKeywords = ytSearchKeywordsMatch[1]
+          .split(",")
+          .map((kw) => kw.trim())
+          .filter((kw) => kw);
+        analysisText = analysisText.replace(ytSearchKeywordsRegex, "").trim();
+      } else {
+        console.warn("YouTube Search Keywords pattern not found.");
+      }
+      // console.log("After YT Search Keywords, remaining:\n", analysisText);
 
-      console.log("Parsed Analysis:", { analysisText, moodScore, keywords });
-      return { analysisText, moodScore, keywords }; // ✨ keywords 반환
+      // 4. Recommended Content Category 추출 (YouTube Search Keywords 바로 앞에 위치)
+      const recCategoryRegex =
+        /\*\*Recommended Content Category:\*\*\s*([^\n]+?)\s*(?=(\*\*YouTube Search Keywords:\*\*|$))/im; // YouTube Search Keywords 전까지
+      const recCategoryMatch = analysisText.match(recCategoryRegex);
+      if (recCategoryMatch && recCategoryMatch[1]) {
+        recommendedCategory = recCategoryMatch[1].trim();
+        analysisText = analysisText.replace(recCategoryRegex, "").trim();
+      } else {
+        console.warn("Recommended Content Category pattern not found.");
+      }
+      // console.log("After Rec Category, remaining (this should be mostly analysisText):\n", analysisText);
+
+      // 5. 남은 텍스트에서 혹시 있을지 모르는 구분선(---)이나 불필요한 앞뒤 공백 제거
+      analysisText = analysisText.replace(/^\s*---\s*/, "").trim(); // 시작 부분의 --- 제거
+      analysisText = analysisText.replace(/\s*---\s*$/, "").trim(); // 끝 부분의 --- 제거 (만약 있다면)
+      analysisText = analysisText.replace(/\n\s*\n/g, "\n"); // 여러 빈 줄 정리
+
+      // (선택적) 페르소나의 특정 시작/끝맺음 문구 제거 로직 (필요하다면)
+      // 예: Dr. Jun의 "*[Adjusts imaginary lab coat]*" 같은 부분
+      // analysisText = analysisText.replace(/\*\[Adjusts imaginary lab coat\]\*/g, "").trim();
+
+      const finalResult = {
+        analysisText,
+        moodScore,
+        keywords: diaryKeywords,
+        recommendedCategory,
+        youtubeSearchKeywords,
+      };
+      console.log(
+        "Final Parsed AI Response (Based on actual samples):",
+        finalResult
+      );
+      return finalResult;
+    } else {
+      console.error("AI response content is empty or undefined.");
+      throw new Error("AI response content is missing.");
     }
   } catch (err) {
     console.error("AI API error:", err);

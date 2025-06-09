@@ -1,4 +1,4 @@
-import React, { Fragment } from "react";
+import React, { Fragment, useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import Homepage from "./pages/HomePage";
 import Writepage from "./pages/WritePage";
@@ -13,6 +13,7 @@ import {
   closeErrorModal,
   closePersonaDetailModal,
   confirmPersonaSelectionFromModal,
+  closeRecommendationModal,
 } from "./store/modalSlice.js";
 
 function App() {
@@ -26,12 +27,24 @@ function App() {
     tempAnalysisData,
     isPersonaDetailModalOpen,
     personaDetailData,
+    isRecommendationModalOpen,
+    recommendationData,
   } = useSelector((state) => state.modal);
 
   const dispatch = useDispatch();
-
   const handleCloseInfoModalInApp = () => dispatch(closeInfoModal());
   const handleCloseErrorModalInApp = () => dispatch(closeErrorModal());
+
+  // ✨ 추천 모달 내에서 현재 재생할 비디오 ID를 위한 로컬 상태 (모달이 열릴 때 첫 영상으로 초기화)
+  const [currentVideoId, setCurrentVideoId] = useState(null);
+
+  useEffect(() => {
+    if (isRecommendationModalOpen && recommendationData?.videos?.length > 0) {
+      setCurrentVideoId(recommendationData.videos[0].id); // 모달 열릴 때 첫 번째 영상 ID로 설정
+    } else {
+      setCurrentVideoId(null); // 모달 닫히거나 데이터 없으면 초기화
+    }
+  }, [isRecommendationModalOpen, recommendationData]);
   return (
     <>
       <Routes>
@@ -208,6 +221,87 @@ function App() {
         </div>
       )}
       {/* -------------------------------- */}
+      {/* --- ✨ 추천 영상 모달 --- */}
+      {isRecommendationModalOpen &&
+        recommendationData &&
+        recommendationData.videos.length > 0 && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[52]">
+            {" "}
+            {/* ✨ z-index 조정, 배경 투명도 증가 */}
+            <div className="bg-stone-800 p-4 sm:p-6 rounded-lg shadow-xl w-full max-w-lg md:max-w-2xl border border-stone-700 flex flex-col max-h-[90vh]">
+              {" "}
+              {/* ✨ 최대 높이 설정 */}
+              {/* 모달 헤더 */}
+              <div className="mb-4 text-center">
+                <p className="text-xs text-stone-400">
+                  {recommendationData.personaName || "AI"} recommends for
+                  category:
+                </p>
+                <h3 className="text-xl font-semibold text-amber-400">
+                  {recommendationData.category || "For You"}
+                </h3>
+              </div>
+              {/* 현재 선택된 비디오 플레이어 */}
+              {currentVideoId && (
+                <div className="aspect-video w-full bg-black rounded-md overflow-hidden mb-4 shadow-md">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1`} // ✨ autoplay=1 추가 (사용자 경험 고려)
+                    title="YouTube video player"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  ></iframe>
+                </div>
+              )}
+              {/* 다른 추천 영상 목록 (썸네일 + 제목) - 스크롤 가능 */}
+              {recommendationData.videos.length > 1 && (
+                <div className="mb-4 border-t border-stone-700 pt-4 flex-grow overflow-y-auto">
+                  <p className="text-sm text-stone-300 mb-2">
+                    Other recommendations:
+                  </p>
+                  <div className="space-y-2">
+                    {recommendationData.videos.map((video) => (
+                      <button
+                        key={video.id}
+                        onClick={() => setCurrentVideoId(video.id)} // ✨ 클릭 시 현재 비디오 변경
+                        className={`w-full flex items-center p-2 rounded-md hover:bg-stone-700 transition-colors text-left
+                                  ${currentVideoId === video.id ? "bg-stone-700 ring-2 ring-amber-500" : ""}`}
+                      >
+                        <img
+                          src={video.thumbnailUrl}
+                          alt={video.title}
+                          className="w-16 h-9 object-cover rounded mr-3 flex-shrink-0"
+                        />
+                        <div className="flex-grow">
+                          <p className="text-xs sm:text-sm font-medium text-stone-100 truncate group-hover:text-amber-400">
+                            {video.title}
+                          </p>
+                          <p className="text-xs text-stone-400 truncate">
+                            {video.channelTitle}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* 닫기 버튼 */}
+              <div className="mt-auto pt-4 text-right">
+                {" "}
+                {/* ✨ 하단 고정 */}
+                <button
+                  onClick={() => dispatch(closeRecommendationModal())}
+                  className="px-5 py-2 rounded bg-stone-600 hover:bg-stone-700 text-stone-100 text-sm font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      {/* ------------------------- */}
     </>
   );
 }
