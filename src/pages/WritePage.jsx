@@ -351,6 +351,7 @@ function Writepage() {
     dispatch(closeErrorModal());
     setYoutubeRecommendations([]);
     setRecommendedCategoryForModal("");
+    let fetchedVideos = []; // ✨ videos 대신 fetchedVideos 사용 또는 videos로 통일
 
     try {
       const {
@@ -374,11 +375,11 @@ function Writepage() {
             ? youtubeSearchKeywords.join(" ")
             : youtubeSearchKeywords;
 
-          const videos = await searchYoutubeVideos(query, 3); // 최대 3개 검색
-          setYoutubeRecommendations(videos); // 검색 결과만 저장 (모달은 바로 열지 않음)
+          // ✨ searchYoutubeVideos 함수의 결과를 fetchedVideos 변수에 할당
+          fetchedVideos = await searchYoutubeVideos(query, 3);
+          setYoutubeRecommendations(fetchedVideos || []); // ✨ 로컬 상태에도 즉시 반영
 
-          if (videos && videos.length > 0) {
-            console.log("No YouTube videos found for the keywords.");
+          if (fetchedVideos && fetchedVideos.length > 0) {
             // ✨ 추천 모달을 열기 위한 데이터 준비
             // const currentPersonaInfo = personasDataArray.find(
             //   (p) => p.id === selectedPersona
@@ -393,12 +394,15 @@ function Writepage() {
             //       : "AI",
             //   })
             // );
+          } else {
+            console.log("No YouTube videos found for the keywords.");
           }
         } catch (youtubeError) {
           console.error(
             "Failed to fetch YouTube recommendations:",
             youtubeError
           );
+          fetchedVideos = [];
           // (선택적) 사용자에게 에러 알림
           // dispatch(openErrorModal("Sorry, an error occurred while fetching video recommendations."));
         } finally {
@@ -418,6 +422,8 @@ function Writepage() {
         moodScore: moodScore,
         personaId: selectedPersona, // 선택된 페르소나 ID 저장
         keywords: keywords || [], // Firestore에도 키워드 저장
+        youtubeRecommendations: fetchedVideos,
+        recommendedCategory: recommendedCategory || "", // ✨ AI가 추천한 카테고리명 저장
       };
 
       const collectionRef = collection(db, "users", currentUser.uid, "diaries");
@@ -438,6 +444,7 @@ function Writepage() {
     } catch (err) {
       console.error("Analyzing error:", err);
       dispatch(openErrorModal(err.message || "Analyzing error"));
+      fetchedVideos = [];
     } finally {
       setLoading(false);
     }
@@ -480,6 +487,10 @@ function Writepage() {
       setSelectDiary(diaryid);
       setSelectedPersona(selectedDiary.personaId || null); // 저장된 페르소나 불러오기
       setEditing(true);
+      setYoutubeRecommendations(selectedDiary.youtubeRecommendations || []);
+      setRecommendedCategoryForModal(
+        selectedDiary.recommendedCategory || "Recommendations"
+      );
       dispatch(closeErrorModal()); // 에러 모달 닫기
     } else {
       console.error("Cannot find diary which you selected", diaryid);
@@ -810,7 +821,7 @@ function Writepage() {
                 Result analyzing
               </h2>
               {/* ✨ 추천 보기 버튼 (youtubeRecommendations에 데이터가 있거나, 로딩 중이 아닐 때 표시) */}
-              {!youtubeSearchLoading && youtubeRecommendations.length > 0 && (
+              {!youtubeSearchLoading && recommendedCategoryForModal && (
                 <div className="mt-4 text-center">
                   {" "}
                   {/* 또는 text-left, text-right */}

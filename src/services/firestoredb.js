@@ -42,6 +42,7 @@ export async function getUserDiaries(userid, count = 10, lastDoc = null) {
         id: doc.id, // 문서 ID 포함
         ...doc.data(), // 문서 데이터 전체 포함
         createdAt: data.createdAt?.toDate().getTime() || null, // null일 경우 대비
+        updatedAt: data.updatedAt?.toDate().getTime() || null,
       });
     });
     const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
