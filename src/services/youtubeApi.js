@@ -1,49 +1,50 @@
 import axios from "axios";
 
-const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
-const YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3/search";
+// ✨ Cloud Function URL을 환경 변수에서 가져옵니다.
+const searchYoutubeFunctionUrl = import.meta.env.VITE_SEARCH_YOUTUBE_URL;
 
 export async function searchYoutubeVideos(query, maxResults = 3) {
-  if (!YOUTUBE_API_KEY) {
-    console.error("YouTube API Key is missing.");
-    // 실제 환경에서는 사용자에게 알리거나, 기능을 비활성화할 수 있습니다.
-    return []; // 빈 배열 반환 또는 에러 throw
+  // ✨ Cloud Function URL이 설정되었는지 확인합니다.
+  if (!searchYoutubeFunctionUrl) {
+    console.error(
+      "Search YouTube function URL is not configured in .env file."
+    );
+    throw new Error(
+      "The video recommendation service is currently unavailable."
+    );
   }
 
   try {
-    const response = await axios.get(YOUTUBE_API_URL, {
-      params: {
-        part: "snippet", // 동영상의 기본 정보(제목, 설명, 썸네일 등)를 가져옴
-        q: query, // 검색어 (AI가 제공한 키워드)
-        key: YOUTUBE_API_KEY,
-        type: "video", // 비디오만 검색
-        maxResults: maxResults,
-        // videoEmbeddable: 'true', // 임베드 가능한 영상만 (선택적)
-        // relevanceLanguage: 'ko', // 한국어 관련 영상 우선 (선택적)
-        // regionCode: 'KR',       // 한국 지역 결과 우선 (선택적)
-      },
+    // ✨ 이제 Google YouTube API가 아닌, 우리가 만든 Cloud Function을 POST 방식으로 호출합니다.
+    const response = await axios.post(searchYoutubeFunctionUrl, {
+      // Cloud Function의 request.body로 전달될 데이터
+      query: query,
+      maxResults: maxResults,
     });
 
+    // Cloud Function은 YouTube API의 원본 응답(response.data.items)을 그대로 전달해줍니다.
     if (response.data && response.data.items) {
-      // 필요한 정보만 추출하여 반환
+      // ✨ 필요한 정보만 추출하는 파싱 로직은 클라이언트에 그대로 유지합니다.
       return response.data.items.map((item) => ({
         id: item.id.videoId,
         title: item.snippet.title,
-        thumbnailUrl: item.snippet.thumbnails.default.url, // 또는 medium, high
+        thumbnailUrl: item.snippet.thumbnails.default.url,
         channelTitle: item.snippet.channelTitle,
-        description: item.snippet.description, // 짧은 설명
+        description: item.snippet.description,
       }));
     } else {
-      console.error("No items found in YouTube API response:", response.data);
-      return [];
+      console.warn(
+        "No items found in YouTube API response from Cloud Function:",
+        response.data
+      );
+      return []; // 결과가 없으면 빈 배열 반환
     }
   } catch (error) {
-    console.error(
-      "Error searching YouTube videos:",
-      error.response ? error.response.data : error.message
-    );
-    // API 할당량 초과, 잘못된 API 키 등의 에러를 여기서 처리할 수 있습니다.
-    // 사용자에게 에러를 알리는 로직을 추가할 수 있습니다. (예: Redux 에러 모달)
-    return []; // 에러 발생 시 빈 배열 반환
+    console.error("Error calling searchYoutube Cloud Function:", error);
+    // Cloud Function에서 보낸 에러 메시지를 표시하거나, 일반적인 에러 메시지를 표시합니다.
+    const errorMessage =
+      error.response?.data?.error?.message ||
+      "Failed to search YouTube videos.";
+    throw new Error(errorMessage);
   }
 }
