@@ -1,9 +1,13 @@
-// ✨ v2 API를 위한 import 구문
+// ✨ 최상단에 admin 관련 import 및 초기화 코드 추가
+import * as admin from "firebase-admin";
+admin.initializeApp();
+
 import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import axios from "axios";
 import { personas as allPersonas } from "./personasData.js";
 import cors from "cors";
+import { getEmotionReport } from "./reportGenerator.js";
 
 const corsHandler = cors({ origin: true });
 
@@ -148,3 +152,5 @@ export const searchYoutube = onRequest(
     });
   }
 );
+
+export const generatereport = getEmotionReport;

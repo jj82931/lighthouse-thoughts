@@ -25,7 +25,7 @@ import {
   EnvelopeIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 // Redux 관련 훅 및 액션 import
 import { useDispatch, useSelector } from "react-redux";
@@ -42,6 +42,8 @@ import {
   clearPersonaForConfirmation,
   openRecommendationModal,
 } from "../store/modalSlice.js";
+// 리포트 관련 아이콘
+import { PresentationChartBarIcon } from "@heroicons/react/24/outline";
 
 // 유튜브 검색 import
 import { searchYoutubeVideos } from "../services/youtubeApi"; // ✨ 유튜브 검색 함수 import
@@ -886,13 +888,19 @@ function Writepage() {
       </button>
       {/* PC 사이드 패널 */}
       <div className="hidden md:flex md:flex-col md:w-2/5 lg:w-1/3 xl:w-1/4 bg-stone-800 p-6 rounded-lg shadow-lg">
-        {" "}
-        {/* --bg-secondary */}
         <h2 className="text-2xl font-bold mb-5 text-stone-100 flex-shrink-0">
-          {" "}
-          {/* --text-primary */}
           Recent Diaries
         </h2>
+        {/* ✨ 리포트 보기 버튼 추가 */}
+        <div className="mb-5 flex-shrink-0">
+          <Link
+            to="/report"
+            className="w-full flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-stone-100 bg-stone-700 hover:bg-stone-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-stone-800 focus:ring-amber-500 transition-colors"
+          >
+            <PresentationChartBarIcon className="h-5 w-5 mr-2" />
+            View Weekly/Monthly Report
+          </Link>
+        </div>
         {/* 정렬 및 검색 UI */}
         <div className="mb-5 flex flex-col sm:flex-row gap-3 flex-shrink-0 items-center">
           <select

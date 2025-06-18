@@ -113,14 +113,15 @@ function FeatureHealingContent() {
           className="text-3xl sm:text-4xl font-bold text-stone-100 mb-6"
           variants={itemVariants}
         >
-          마음 따라 흐르는, AI 추천 힐링
+          AI-powered healing, guided by your emotions
         </motion.h2>
         <motion.p
           className="text-lg text-stone-300 leading-relaxed mb-12 max-w-2xl mx-auto"
           variants={itemVariants}
         >
-          당신의 현재 감정에 귀 기울여 보세요. AI는 당신의 마음 상태에 맞춰 꼭
-          필요한 음악, 영상, 또는 명상 가이드를 추천해 줄 거예요.
+          Tune into how you're feeling right now. Based on your emotional state,
+          the AI will recommend just what you need music, videos, or meditation
+          guides to help you heal and recharge.
         </motion.p>
 
         {/* 감정 선택 UI (감정 바퀴/스펙트럼 대신 아이콘 버튼 그룹으로 간소화) */}

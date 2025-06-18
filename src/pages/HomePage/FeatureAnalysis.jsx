@@ -69,16 +69,16 @@ function FeatureAnalysis() {
             className="text-3xl sm:text-4xl font-bold text-stone-100 mb-4" // ✨ 텍스트 색상 명시 (예: text-stone-100)
             variants={itemVariants}
           >
-            마음의 소리에 귀 기울이다
+            Listening to the whispers of your heart
           </motion.h2>
           <motion.p
             className="text-lg text-stone-300 leading-relaxed" // ✨ 텍스트 색상 명시 (예: text-stone-300)
             variants={itemVariants}
           >
-            복잡한 생각과 감정을 솔직하게 적어보세요. Lighthouse Thoughts의 AI가
-            당신의 마음을 섬세하게 분석하고, 숨겨진 감정의 의미를 함께
-            찾아줍니다. Mood Score와 핵심 키워드를 통해 자신을 더 깊이 이해할 수
-            있습니다.
+            Let your thoughts flow freely messy, tangled, and real. Lighthouse
+            Thoughts gently embraces your words, uncovering the quiet meanings
+            behind each emotion. Through mood reflections and soul-touching
+            keywords, you'll begin to see yourself more clearly, more deeply.
           </motion.p>
         </motion.div>
 

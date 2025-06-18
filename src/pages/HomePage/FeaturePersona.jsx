@@ -77,16 +77,16 @@ function FeaturePersona() {
           className="text-3xl sm:text-4xl font-bold text-stone-100 mb-6"
           variants={itemVariants}
         >
-          언제나 네 곁에, 맞춤형 AI 친구{" "}
-          {/* 또는 "당신만을 위한 공감 파트너" */}
+          An empathy partner, just for you
         </motion.h2>
         <motion.p
           className="text-lg text-stone-300 leading-relaxed mb-12 max-w-2xl mx-auto"
           variants={itemVariants}
         >
-          때로는 따뜻한 위로가, 때로는 현실적인 조언이 필요하죠. 당신이 선택한
-          AI 페르소나가 당신의 이야기에 깊이 공감하며 맞춤형 지지를 보내줄
-          거예요.
+          There are moments when all you need is a gentle comfort and others
+          when what you truly need is honest, grounding advice. Your chosen AI
+          persona listens with a heart, responds with care, and offers the kind
+          of support that feels truly personal.
         </motion.p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-8 mt-12">

@@ -7,8 +7,12 @@ import {
   DialogTitle,
   TransitionChild,
 } from "@headlessui/react";
+import { Link } from "react-router-dom";
 // 아이콘 추가 (닫기 버튼용)
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  XMarkIcon,
+  PresentationChartBarIcon,
+} from "@heroicons/react/24/outline";
 
 function MobileDiaryList({
   isOpen,
@@ -83,6 +87,17 @@ function MobileDiaryList({
                     <XMarkIcon className="h-5 w-5" aria-hidden="true" />
                   </button>
                 </DialogTitle>
+                {/* ✨ 모바일 패널에도 리포트 보기 버튼 추가 */}
+                <div className="mb-5 flex-shrink-0">
+                  <Link
+                    to="/report"
+                    onClick={onClose} // ✨ 버튼 클릭 시 패널이 닫히도록
+                    className="w-full flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-stone-100 bg-stone-700 hover:bg-stone-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-stone-800 focus:ring-amber-500 transition-colors"
+                  >
+                    <PresentationChartBarIcon className="h-5 w-5 mr-2" />
+                    View Report
+                  </Link>
+                </div>
                 {/* 정렬 및 검색 UI */}
                 <div className="mb-5 flex flex-col gap-3 flex-shrink-0">
                   <select

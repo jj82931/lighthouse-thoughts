@@ -73,14 +73,14 @@ function FinalCTASection() {
           className="text-3xl sm:text-4xl font-bold tracking-tight text-stone-100"
           variants={itemVariants}
         >
-          Ready to Start Your Journey?
+          Whenever you're ready, we're here
         </motion.h2>
         <motion.p
           className="mt-4 text-lg text-stone-300"
           variants={itemVariants}
         >
-          Join Lighthouse Thoughts today and discover a new path to
-          self-understanding and emotional well-being.
+          Lighthouse Thoughts is a quiet space for you to pause, feel, and
+          understand yourself. One moment at a time.
         </motion.p>
         <motion.div className="mt-8" variants={itemVariants}>
           <button

@@ -2,6 +2,7 @@ import React, { Fragment, useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import Homepage from "./pages/HomePage";
 import Writepage from "./pages/WritePage";
+import ReportPage from "./pages/ReportPage.jsx";
 import ProtectedRoute from "./components/ProtectionRoute";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -57,7 +58,16 @@ function App() {
             </ProtectedRoute>
           }
         ></Route>
+        <Route
+          path="/report"
+          element={
+            <ProtectedRoute>
+              <ReportPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
+
       {/* 수정 확인 모달 */}
       {isUpdateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">

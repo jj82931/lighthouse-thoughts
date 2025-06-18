@@ -183,23 +183,24 @@ function FeatureDataVisualization() {
             className="text-3xl sm:text-4xl font-bold text-stone-100 mb-4"
             variants={itemVariants}
           >
-            데이터로 발견하는 나의 모습
+            Discover yourself through your data
           </motion.h2>
           <motion.p
             className="text-lg text-stone-300 leading-relaxed mb-6"
             variants={itemVariants}
           >
-            Lighthouse Thoughts는 당신의 일기에서 단순한 텍스트를 넘어, 의미
-            있는 감정의 패턴과 변화를 발견합니다. 주간, 월간 리포트를 통해
-            당신의 Mood Score 변화, 주요 감정 키워드, 그리고 성장의 순간들을
-            아름다운 시각화로 만나보세요.
+            Lighthouse Thoughts looks beyond simple text, finding meaningful
+            emotional patterns and subtle shifts in your feelings. Through
+            weekly and monthly reports, you'll see how your Mood Score changes,
+            what emotions speak the loudest, and how you've grown — all
+            beautifully visualized.
           </motion.p>
           <motion.p
             className="text-md text-stone-400 leading-relaxed"
             variants={itemVariants}
           >
-            이 모든 인사이트는 당신이 어떤 기기를 사용하든 손쉽게 확인할 수
-            있도록 반응형으로 제공됩니다.
+            Wherever you are, on any device, your emotional insights are always
+            within reach.
           </motion.p>
         </motion.div>
 

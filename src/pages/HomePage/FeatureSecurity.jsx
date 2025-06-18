@@ -73,16 +73,15 @@ function FeatureSecurity() {
             className="text-3xl sm:text-4xl font-bold text-stone-100 mb-4"
             variants={itemVariants}
           >
-            당신의 모든 순간은 소중하니까{" "}
-            {/* 또는 "안심하고 기록하세요, 당신만의 비밀 공간" */}
+            Because every moment of yours matters
           </motion.h2>
           <motion.p
             className="text-lg text-stone-300 leading-relaxed mb-6"
             variants={itemVariants}
           >
-            모든 일기는 안전한 클라우드(Firestore)에 암호화되어 저장되며, 오직
-            당신만이 접근할 수 있습니다. 우리는 당신의 소중한 기록과 개인 정보
-            보호를 최우선으로 생각합니다.
+            Every journal entry is securely encrypted and stored in the cloud,
+            accessible only by you. We treat your precious memories and privacy
+            with the utmost care and respect.
           </motion.p>
           <motion.div
             className="flex flex-col space-y-3 text-sm text-stone-400"

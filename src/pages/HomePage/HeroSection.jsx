@@ -26,8 +26,8 @@ function HeroSection() {
           Lighthouse Thoughts✨
         </h1>
         <p className="mt-6 text-lg sm:text-xl md:text-2xl text-stone-200 max-w-xl mx-auto drop-shadow mb-20 sm:mb-24 md:mb-28">
-          오늘, 당신의 마음은 어떤가요? <br className="hidden sm:inline" />
-          때로는 말로 다 표현하기 어려운 감정들이 있죠.
+          How is your mind today? <br className="hidden sm:inline" />
+          Sometimes, it's hard to put our feelings into words.
         </p>
         <div className="absolute bottom-8 sm:bottom-10 left-1/2 -translate-x-1/2 z-30 animate-bounce">
           {/* 아래 화살표 아이콘 등 (Heroicons 사용 가능) */}

@@ -4,7 +4,7 @@ import { useAuth } from "../../src/contexts/Auth";
 // eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 
-// ✨ 각 랜딩 페이지 섹션 컴포넌트 import
+// 각 랜딩 페이지 섹션 컴포넌트 import
 import HeroSection from "./HomePage/HeroSection";
 import FeatureAnalysis from "./HomePage/FeatureAnalysis";
 import FeaturePersona from "./HomePage/FeaturePersona";
@@ -74,7 +74,6 @@ function HomePage() {
       <FeatureSecurity />
       <FeatureGrowthJourney />
       <FinalCTASection />
-      {/* <Footer /> */}
     </div>
   );
 }
